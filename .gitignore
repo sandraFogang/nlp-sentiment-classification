@@ -33,6 +33,7 @@ models/*.safetensors
 data/raw/*.txt
 data/raw/*.csv
 data/processed/
+data/huggingface_cache/
 
 # === Secrets et variables d'environnement ===
 .env
