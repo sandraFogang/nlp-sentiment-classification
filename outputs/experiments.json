@@ -1,0 +1,38 @@
+[
+  {
+    "name": "bigram_baseline_imdb",
+    "timestamp": "2026-05-03T15:16:46.517618+00:00",
+    "dataset": "imdb",
+    "splits": {
+      "train": 22000,
+      "val": 3000,
+      "test": 25000
+    },
+    "model": {
+      "type": "logistic_regression",
+      "features": "2-grams (count)",
+      "vocab_size": 30000,
+      "max_vocab_size": 30000
+    },
+    "preprocessing": {
+      "lowercase": true,
+      "remove_punctuation": true,
+      "stop_words_removed": false,
+      "lemmatization": false
+    },
+    "training": {
+      "batch_size": 32,
+      "epochs": 5,
+      "learning_rate": 0.001,
+      "optimizer": "Adam",
+      "loss": "CrossEntropyLoss"
+    },
+    "val_metrics": {
+      "accuracy": 0.8877,
+      "precision": 0.8926,
+      "recall": 0.8813,
+      "f1": 0.887
+    },
+    "saved_as_production": true
+  }
+]

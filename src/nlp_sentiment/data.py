@@ -1,72 +1,107 @@
 """
-data.py — Chargement et préparation du corpus Movie Reviews.
+data.py — Chargement et préparation du corpus IMDB.
 
-Le corpus NLTK Movie Reviews contient 2 000 critiques de films
-en anglais (1 000 positives, 1 000 négatives).
+Source : IMDB Large Movie Review Dataset (Maas et al. 2011)
+- 25 000 critiques pour le train (50% pos, 50% neg)
+- 25 000 critiques pour le test (50% pos, 50% neg)
+
+Le val set est extrait du train officiel pour préserver l'intégrité
+du test set (intouché jusqu'à l'évaluation finale).
 """
-import random
+from datasets import load_dataset
+from sklearn.model_selection import train_test_split
 
-import nltk
-from nltk.corpus import movie_reviews
+from nlp_sentiment.config import (
+    DATASET_NAME,
+    HF_CACHE_DIR,
+    RANDOM_SEED,
+    REVIEW_CLASSES,
+    VAL_SIZE,
+)
 
-from nlp_sentiment.config import RANDOM_SEED, TRAIN_SPLIT
+
+def _label_int_to_str(label: int) -> str:
+    """Convertit un label IMDB (0 ou 1) en chaîne ('neg' ou 'pos')."""
+    return REVIEW_CLASSES[label]
 
 
-def download_corpus_if_needed() -> None:
+def load_imdb_splits() -> tuple[
+    list[tuple[str, str]],
+    list[tuple[str, str]],
+    list[tuple[str, str]],
+]:
     """
-    Télécharge le corpus NLTK Movie Reviews s'il n'est pas déjà présent.
+    Charge IMDB 50k et retourne 3 splits : train, val, test.
 
-    Cette fonction est silencieuse si le corpus est déjà téléchargé
-    sur la machine.
-    """
-    try:
-        movie_reviews.fileids()
-    except LookupError:
-        print("Téléchargement du corpus NLTK Movie Reviews...")
-        nltk.download("movie_reviews", quiet=True)
-        print("Corpus téléchargé avec succès.")
-
-
-def load_movie_reviews() -> list[tuple[str, str]]:
-    """
-    Charge toutes les critiques de films depuis le corpus NLTK.
+    Le test set est le test officiel IMDB (25 000 critiques), intouché.
+    Le val set (3 000 critiques) est extrait du train officiel de manière
+    stratifiée et reproductible.
 
     Returns:
-        Liste de tuples (texte_critique, classe) où classe est 'pos' ou 'neg'.
+        Tuple (train, val, test) où chaque ensemble est une liste de
+        tuples (texte, classe). La classe est 'pos' ou 'neg'.
+
+    Note:
+        Au premier appel, télécharge IMDB depuis Hugging Face (~80 Mo).
+        Les appels suivants utilisent le cache local dans data/huggingface_cache.
     """
-    download_corpus_if_needed()
+    # Crée le dossier de cache si nécessaire
+    HF_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-    documents = []
-    for category in movie_reviews.categories():
-        for fileid in movie_reviews.fileids(category):
-            text = movie_reviews.raw(fileid)
-            documents.append((text, category))
+    # Télécharge (ou charge depuis le cache) le dataset complet
+    dataset = load_dataset(DATASET_NAME, cache_dir=str(HF_CACHE_DIR))
 
-    return documents
+    # === Test set : tel quel, on n'y touche pas ===
+    test_texts = dataset["test"]["text"]
+    test_labels = dataset["test"]["label"]
+    test = [
+        (text, _label_int_to_str(label))
+        for text, label in zip(test_texts, test_labels)
+    ]
+
+    # === Train + Val : on split le train officiel ===
+    train_texts_full = dataset["train"]["text"]
+    train_labels_full = dataset["train"]["label"]
+
+    # Split stratifié reproductible
+    train_texts, val_texts, train_labels, val_labels = train_test_split(
+        train_texts_full,
+        train_labels_full,
+        test_size=VAL_SIZE,
+        random_state=RANDOM_SEED,
+        stratify=train_labels_full,
+    )
+
+    train = [
+        (text, _label_int_to_str(label))
+        for text, label in zip(train_texts, train_labels)
+    ]
+    val = [
+        (text, _label_int_to_str(label))
+        for text, label in zip(val_texts, val_labels)
+    ]
+
+    return train, val, test
 
 
-def split_train_test(
-    documents: list[tuple[str, str]],
-    train_ratio: float = TRAIN_SPLIT,
-    seed: int = RANDOM_SEED,
-) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
+def describe_splits(
+    train: list[tuple[str, str]],
+    val: list[tuple[str, str]],
+    test: list[tuple[str, str]],
+) -> None:
     """
-    Mélange les documents et les sépare en ensembles d'entraînement et de test.
+    Affiche un résumé descriptif des 3 splits.
 
-    Args:
-        documents: Liste de tuples (texte, classe).
-        train_ratio: Proportion utilisée pour l'entraînement (0.8 par défaut).
-        seed: Graine aléatoire pour la reproductibilité.
-
-    Returns:
-        Tuple (train_dataset, test_dataset).
+    Utile pour vérifier que le chargement et le split sont cohérents.
     """
-    random.seed(seed)
-    shuffled = documents.copy()
-    random.shuffle(shuffled)
+    def class_distribution(dataset: list[tuple[str, str]]) -> dict[str, int]:
+        return {
+            cls: sum(1 for _, label in dataset if label == cls)
+            for cls in REVIEW_CLASSES
+        }
 
-    split_idx = int(len(shuffled) * train_ratio)
-    train_dataset = shuffled[:split_idx]
-    test_dataset = shuffled[split_idx:]
-
-    return train_dataset, test_dataset
+    print(f"{'Split':<10} {'Total':<8} {'neg':<6} {'pos':<6}")
+    print("-" * 32)
+    for name, dataset in [("Train", train), ("Val", val), ("Test", test)]:
+        dist = class_distribution(dataset)
+        print(f"{name:<10} {len(dataset):<8} {dist['neg']:<6} {dist['pos']:<6}")
