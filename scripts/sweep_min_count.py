@@ -102,10 +102,12 @@ def main() -> None:
             f"{acc:<10.4f} {f1:<10.4f} {min_val_loss:<14.4f} {best_epoch:<12}"
         )
 
-    best = max(results, key=lambda e: e["val_metrics"]["accuracy"])
+    # Sélection par F1 (plus robuste que l'accuracy en cas de déséquilibre)
+    best = max(results, key=lambda e: e["val_metrics"]["f1"])
     print(
-        f"\n→ Meilleur run min_count : {best['name']} "
+        f"\n→ Meilleur run min_count (sélection par F1) : {best['name']} "
         f"(min_count={best['model']['vocab_param']}, "
+        f"F1 val = {best['val_metrics']['f1']:.4f}, "
         f"accuracy val = {best['val_metrics']['accuracy']:.4f})"
     )
 

@@ -32,7 +32,16 @@ MAX_VOCAB_SIZE = 30_000
 # === Hyperparamètres d'entraînement ===
 BATCH_SIZE = 32
 LEARNING_RATE = 0.001
-N_EPOCHS = 5
+N_EPOCHS = 5  # Conservé pour compatibilité (entraînement sans early stopping)
+
+# === Early stopping ===
+# Nombre max d'époques (ne sera atteint que si la val loss continue de baisser)
+MAX_EPOCHS = 15
+# Patience : nombre d'époques sans amélioration avant d'arrêter
+EARLY_STOPPING_PATIENCE = 3
+# Amélioration minimale pour considérer qu'il y a une "vraie" baisse de val loss
+# (évite que des fluctuations infimes empêchent l'arrêt)
+EARLY_STOPPING_MIN_DELTA = 0.0001
 
 # === Hyperparamètres du LSTM ===
 LSTM_EMBEDDING_DIM = 64

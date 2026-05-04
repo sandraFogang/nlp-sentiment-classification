@@ -28,6 +28,9 @@ models/*.pt
 models/*.pth
 models/*.bin
 models/*.safetensors
+models/checkpoints/*.pkl
+models/checkpoints/*.pt
+models/checkpoints/*.pth
 
 # === Données brutes (à télécharger par l'utilisateur via NLTK) ===
 data/raw/*.txt

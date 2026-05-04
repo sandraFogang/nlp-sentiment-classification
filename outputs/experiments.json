@@ -515,5 +515,143 @@
       ]
     },
     "saved_as_production": false
+  },
+  {
+    "name": "bigram_mincount_3_es",
+    "timestamp": "2026-05-04T02:45:03.041543+00:00",
+    "dataset": "imdb",
+    "splits": {
+      "train": 22000,
+      "val": 3000,
+      "test": 25000
+    },
+    "model": {
+      "type": "logistic_regression",
+      "features": "2-grams (count)",
+      "vocab_size": 214756,
+      "vocab_strategy": "min_count",
+      "vocab_param": 3
+    },
+    "preprocessing": {
+      "lowercase": true,
+      "remove_punctuation": true,
+      "stop_words_removed": false,
+      "lemmatization": false
+    },
+    "training": {
+      "batch_size": 32,
+      "max_epochs": 15,
+      "epochs_run": 7,
+      "learning_rate": 0.001,
+      "optimizer": "Adam",
+      "loss": "CrossEntropyLoss",
+      "weight_decay": 0.0,
+      "early_stopping": {
+        "enabled": true,
+        "patience": 3,
+        "min_delta": 0.0005,
+        "stopped_early": true,
+        "best_epoch": 4
+      }
+    },
+    "val_metrics": {
+      "accuracy": 0.9057,
+      "precision": 0.9109,
+      "recall": 0.8993,
+      "f1": 0.9051
+    },
+    "loss_history": {
+      "train_loss": [
+        0.3725,
+        0.1095,
+        0.055,
+        0.0324,
+        0.0207,
+        0.0139,
+        0.0096
+      ],
+      "val_loss": [
+        0.2737,
+        0.2461,
+        0.2374,
+        0.2358,
+        0.2353,
+        0.2379,
+        0.2406
+      ],
+      "best_epoch": 4,
+      "stopped_early": true
+    },
+    "saved_as_production": false
+  },
+  {
+    "name": "bigram_mincount_3_es",
+    "timestamp": "2026-05-04T03:21:23.767017+00:00",
+    "dataset": "imdb",
+    "splits": {
+      "train": 22000,
+      "val": 3000,
+      "test": 25000
+    },
+    "model": {
+      "type": "logistic_regression",
+      "features": "2-grams (count)",
+      "vocab_size": 214756,
+      "vocab_strategy": "min_count",
+      "vocab_param": 3
+    },
+    "preprocessing": {
+      "lowercase": true,
+      "remove_punctuation": true,
+      "stop_words_removed": false,
+      "lemmatization": false
+    },
+    "training": {
+      "batch_size": 32,
+      "max_epochs": 15,
+      "epochs_run": 8,
+      "learning_rate": 0.001,
+      "optimizer": "Adam",
+      "loss": "CrossEntropyLoss",
+      "weight_decay": 0.0,
+      "early_stopping": {
+        "enabled": true,
+        "patience": 3,
+        "min_delta": 0.0001,
+        "stopped_early": true,
+        "best_epoch": 5
+      }
+    },
+    "val_metrics": {
+      "accuracy": 0.9067,
+      "precision": 0.9094,
+      "recall": 0.9033,
+      "f1": 0.9064
+    },
+    "loss_history": {
+      "train_loss": [
+        0.3725,
+        0.1095,
+        0.055,
+        0.0324,
+        0.0207,
+        0.0139,
+        0.0096,
+        0.0067
+      ],
+      "val_loss": [
+        0.2737,
+        0.2461,
+        0.2374,
+        0.2358,
+        0.2353,
+        0.2379,
+        0.2406,
+        0.2447
+      ],
+      "best_epoch": 5,
+      "stopped_early": true
+    },
+    "saved_as_production": true
   }
 ]

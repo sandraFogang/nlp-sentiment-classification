@@ -24,12 +24,14 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from nlp_sentiment.config import (
     BATCH_SIZE,
+    EARLY_STOPPING_MIN_DELTA,
+    EARLY_STOPPING_PATIENCE,
     EXPERIMENTS_PATH,
     LEARNING_RATE,
+    MAX_EPOCHS,
     MAX_VOCAB_SIZE,
     MODEL_PATH,
     MODELS_DIR,
-    N_EPOCHS,
     OUTPUTS_DIR,
     RANDOM_SEED,
     REVIEW_CLASSES,
@@ -80,6 +82,8 @@ def run_experiment(
     vocab_strategy: str = "top_k",
     vocab_param: int = MAX_VOCAB_SIZE,
     weight_decay: float = 0.0,
+    max_epochs: int = MAX_EPOCHS,
+    use_early_stopping: bool = True,
     save_as_production_model: bool = False,
     verbose: bool = True,
 ) -> dict:
@@ -151,7 +155,9 @@ def run_experiment(
         model,
         train_loader,
         val_loader=val_loader,
+        epochs=max_epochs,
         weight_decay=weight_decay,
+        use_early_stopping=use_early_stopping,
     )
 
     # Évaluation sur val
@@ -196,11 +202,19 @@ def run_experiment(
         },
         "training": {
             "batch_size": BATCH_SIZE,
-            "epochs": N_EPOCHS,
+            "max_epochs": max_epochs,
+            "epochs_run": len(history["train_loss"]),
             "learning_rate": LEARNING_RATE,
             "optimizer": "Adam",
             "loss": "CrossEntropyLoss",
             "weight_decay": weight_decay,
+            "early_stopping": {
+                "enabled": use_early_stopping,
+                "patience": EARLY_STOPPING_PATIENCE,
+                "min_delta": EARLY_STOPPING_MIN_DELTA,
+                "stopped_early": history.get("stopped_early", False),
+                "best_epoch": history.get("best_epoch", len(history["train_loss"])),
+            },
         },
         "val_metrics": val_metrics,
         "loss_history": history,
