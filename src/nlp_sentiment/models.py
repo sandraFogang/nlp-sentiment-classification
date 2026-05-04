@@ -94,3 +94,103 @@ class LSTMClassifier(nn.Module):
 
         # Seul le dernier état caché est utilisé pour la classification
         return self.final_classifier_layer(h_prior)
+
+class BiLSTMClassifier(nn.Module):
+    """
+    Classificateur bidirectionnel LSTM avec dropout et embedding initialisable.
+
+    Architecture :
+    1. Embedding (vocab_size → emb_dim) — initialisable avec GloVe
+    2. Dropout (sur les embeddings, contre l'overfitting)
+    3. LSTM bidirectionnel (1 couche par défaut)
+    4. Dropout (sur l'état caché final)
+    5. Linear (2 * hidden_dim → output_dim)
+
+    Args:
+        vocab_size: Taille du vocabulaire (incluant <PAD> et <UNK>).
+        emb_dim: Dimension des embeddings (typiquement 100 si GloVe 6B.100d).
+        hidden_dim: Dimension de l'état caché du LSTM (par direction).
+        output_dim: Nombre de classes (2 : pos/neg).
+        dropout_rate: Taux de dropout (0.3 typique).
+        pretrained_embeddings: Tenseur (vocab_size, emb_dim) pour init GloVe (optionnel).
+        freeze_embeddings: Si True, les embeddings ne sont PAS entraînés (rare).
+    """
+
+    def __init__(
+        self,
+        vocab_size: int,
+        emb_dim: int = 100,
+        hidden_dim: int = 64,
+        output_dim: int = 2,
+        dropout_rate: float = 0.3,
+        pretrained_embeddings: torch.Tensor | None = None,
+        freeze_embeddings: bool = False,
+    ):
+        super().__init__()
+        self.vocab_size = vocab_size
+        self.emb_dim = emb_dim
+        self.hidden_dim = hidden_dim
+        self.output_dim = output_dim
+
+        # === Embedding layer ===
+        # padding_idx=0 : les positions PAD ne contribuent pas au gradient
+        self.embeddings = nn.Embedding(vocab_size, emb_dim, padding_idx=0)
+
+        # Initialisation pré-entraînée (GloVe) si fournie
+        if pretrained_embeddings is not None:
+            assert pretrained_embeddings.shape == (vocab_size, emb_dim), (
+                f"Shape mismatch : {pretrained_embeddings.shape} vs ({vocab_size}, {emb_dim})"
+            )
+            self.embeddings.weight.data.copy_(pretrained_embeddings)
+            if freeze_embeddings:
+                self.embeddings.weight.requires_grad = False
+
+        # === Dropout sur les embeddings ===
+        self.embedding_dropout = nn.Dropout(dropout_rate)
+
+        # === LSTM bidirectionnel ===
+        # batch_first=True : input shape (batch, seq, features) au lieu de (seq, batch, features)
+        # bidirectional=True : double la dimension de sortie (concat des 2 directions)
+        self.lstm = nn.LSTM(
+            input_size=emb_dim,
+            hidden_size=hidden_dim,
+            num_layers=1,
+            bidirectional=True,
+            batch_first=True,
+        )
+
+        # === Dropout avant la couche finale ===
+        self.output_dropout = nn.Dropout(dropout_rate)
+
+        # === Couche de classification ===
+        # 2 * hidden_dim car bidirectionnel (concat forward + backward)
+        self.fc = nn.Linear(2 * hidden_dim, output_dim)
+
+    def forward(self, input_seq: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            input_seq: Tenseur (batch_size, seq_len) d'indices de mots.
+
+        Returns:
+            Logits (batch_size, output_dim).
+        """
+        # (batch, seq) → (batch, seq, emb_dim)
+        embedded = self.embeddings(input_seq)
+        embedded = self.embedding_dropout(embedded)
+
+        # LSTM bidirectionnel
+        # output : (batch, seq, 2 * hidden_dim)
+        # h_n   : (2, batch, hidden_dim)  — états cachés finaux des 2 directions
+        # c_n   : (2, batch, hidden_dim)
+        _, (h_n, _) = self.lstm(embedded)
+
+        # Concaténation des derniers états cachés des 2 directions
+        # h_n[0] = forward,  h_n[1] = backward
+        # → (batch, 2 * hidden_dim)
+        h_concat = torch.cat([h_n[0], h_n[1]], dim=1)
+
+        # Dropout + classification finale
+        h_concat = self.output_dropout(h_concat)
+        logits = self.fc(h_concat)
+
+        return logits

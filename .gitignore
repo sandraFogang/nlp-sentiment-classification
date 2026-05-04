@@ -32,11 +32,12 @@ models/checkpoints/*.pkl
 models/checkpoints/*.pt
 models/checkpoints/*.pth
 
-# === Données brutes (à télécharger par l'utilisateur via NLTK) ===
+# === Données brutes (à télécharger par l'utilisateur) ===
 data/raw/*.txt
 data/raw/*.csv
 data/processed/
 data/huggingface_cache/
+data/glove/
 
 # === Secrets et variables d'environnement ===
 .env
