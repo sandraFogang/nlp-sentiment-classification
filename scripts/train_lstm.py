@@ -1,18 +1,16 @@
 """
 train_lstm.py — Entraînement du LSTM bidirectionnel avec GloVe.
 
+Ce module fournit une fonction `run_lstm_experiment()` réutilisable par :
+- main() : un seul run avec les paramètres par défaut
+- scripts/sweep_lstm_vocab.py : sweep sur la taille du vocabulaire
+- (futur) scripts/sweep_lstm_hidden.py, etc.
+
 Usage local (CPU, lent) :
     python scripts/train_lstm.py
 
 Usage Colab (GPU, rapide) :
-    Voir notebooks/lstm_colab.ipynb (à venir).
-
-Hyperparamètres principaux :
-- Vocabulaire : 30 000 mots, min_count=5
-- Séquence : 512 mots (padding/troncature)
-- Embeddings : GloVe 100d (avec fine-tuning)
-- LSTM : bidirectionnel, hidden 64, dropout 0.3
-- Optimisation : Adam, lr=0.001, batch 32
+    Voir notebook Colab fourni séparément.
 """
 import json
 import pickle
@@ -28,12 +26,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from nlp_sentiment.config import (
-    BATCH_SIZE,
     DEVICE,
     EARLY_STOPPING_MIN_DELTA,
     EARLY_STOPPING_PATIENCE,
     EXPERIMENTS_PATH,
-    LEARNING_RATE,
     MODELS_DIR,
     OUTPUTS_DIR,
     RANDOM_SEED,
@@ -49,36 +45,24 @@ from nlp_sentiment.train import train
 
 
 # ============================================================================
-# Configuration
+# Constantes par défaut (peuvent être surchargées par les paramètres de fonction)
 # ============================================================================
-EXPERIMENT_NAME = "bilstm_glove_baseline"
-
-# Données
-MAX_VOCAB_SIZE = 30000
-MIN_COUNT = 5
-MAX_SEQ_LEN = 512
-
-# GloVe
-GLOVE_PATH = PROJECT_ROOT / "data" / "glove" / "glove.6B.100d.txt"
-EMBEDDING_DIM = 100
-
-# Modèle
-HIDDEN_DIM = 64
-DROPOUT_RATE = 0.3
-
-# Entraînement
-LSTM_LEARNING_RATE = 0.001
-LSTM_BATCH_SIZE = 64  # plus gros que pour les n-grammes (les séquences sont compactes en RAM)
-LSTM_MAX_EPOCHS = 15
-
-# Production
-SAVE_AS_PRODUCTION = False  # à True UNIQUEMENT si on adopte ce modèle
+DEFAULT_GLOVE_PATH = PROJECT_ROOT / "data" / "glove" / "glove.6B.100d.txt"
+DEFAULT_EMBEDDING_DIM = 100
+DEFAULT_MAX_SEQ_LEN = 512
+DEFAULT_MIN_COUNT = 5
+DEFAULT_HIDDEN_DIM = 64
+DEFAULT_DROPOUT_RATE = 0.3
+DEFAULT_LEARNING_RATE = 0.001
+DEFAULT_BATCH_SIZE = 64
+DEFAULT_MAX_EPOCHS = 15
 
 
 # ============================================================================
-# Logging des expériences (réutilise le format existant)
+# Logging des expériences
 # ============================================================================
 def log_experiment(experiment: dict) -> None:
+    """Ajoute une expérience au fichier experiments.json (cumulatif)."""
     EXPERIMENTS_PATH.parent.mkdir(parents=True, exist_ok=True)
     if EXPERIMENTS_PATH.exists():
         with open(EXPERIMENTS_PATH, "r", encoding="utf-8") as f:
@@ -92,86 +76,128 @@ def log_experiment(experiment: dict) -> None:
 
 
 # ============================================================================
-# Pipeline principal
+# Pipeline réutilisable : un run d'entraînement LSTM
 # ============================================================================
-def main() -> None:
-    random.seed(RANDOM_SEED)
-    torch.manual_seed(TORCH_SEED)
+def run_lstm_experiment(
+    experiment_name: str,
+    train_data: list[tuple[str, str]],
+    val_data: list[tuple[str, str]],
+    test_data: list[tuple[str, str]],
+    max_vocab_size: int = 30000,
+    min_count: int = DEFAULT_MIN_COUNT,
+    max_seq_len: int = DEFAULT_MAX_SEQ_LEN,
+    embedding_dim: int = DEFAULT_EMBEDDING_DIM,
+    hidden_dim: int = DEFAULT_HIDDEN_DIM,
+    dropout_rate: float = DEFAULT_DROPOUT_RATE,
+    learning_rate: float = DEFAULT_LEARNING_RATE,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    max_epochs: int = DEFAULT_MAX_EPOCHS,
+    glove_embeddings: dict[str, torch.Tensor] | None = None,
+    glove_path: Path = DEFAULT_GLOVE_PATH,
+    save_as_production_model: bool = False,
+    verbose: bool = True,
+) -> dict:
+    """
+    Entraîne et évalue un BiLSTMClassifier avec embeddings GloVe.
 
-    print("=" * 60)
-    print(f"ENTRAÎNEMENT LSTM : {EXPERIMENT_NAME}")
-    print(f"Device : {DEVICE}")
-    print("=" * 60)
+    Args:
+        experiment_name: Identifiant unique de l'expérience.
+        train_data, val_data, test_data: Splits IMDB.
+        max_vocab_size: Taille max du vocabulaire LSTM (incluant <PAD> et <UNK>).
+        min_count: Fréquence minimale d'un mot.
+        max_seq_len: Longueur des séquences (padding/troncature).
+        embedding_dim: Dimension des embeddings (doit matcher GloVe).
+        hidden_dim: Dimension de l'état caché du LSTM (par direction).
+        dropout_rate: Taux de dropout.
+        learning_rate, batch_size, max_epochs: Hyperparamètres d'entraînement.
+        glove_embeddings: Dict GloVe pré-chargé (optimisation pour les sweeps).
+                          Si None, recharge depuis glove_path.
+        glove_path: Chemin du fichier GloVe (utilisé si glove_embeddings=None).
+        save_as_production_model: Si True, sauvegarde dans models/.
+        verbose: Affiche les étapes.
 
-    # === 1. Chargement IMDB ===
-    print("\n--- ÉTAPE 1 : Chargement IMDB ---")
-    train_data, val_data, test_data = load_imdb_splits()
-    describe_splits(train_data, val_data, test_data)
+    Returns:
+        Le dict de l'expérience (logué dans experiments.json).
+    """
+    if verbose:
+        print(f"\n{'#' * 60}")
+        print(f"# Expérience LSTM : {experiment_name}")
+        print(f"# vocab_size_max = {max_vocab_size}, hidden_dim = {hidden_dim}")
+        print(f"# Device : {DEVICE}")
+        print(f"{'#' * 60}")
 
-    # === 2. Préparation des séquences ===
-    print("\n--- ÉTAPE 2 : Préparation des séquences ---")
+    # === 1. Préparation des séquences ===
+    if verbose:
+        print("\n--- Préparation des séquences ---")
     train_dataset, val_dataset, vocab = prepare_lstm_data(
         train_data,
         val_data,
-        max_vocab_size=MAX_VOCAB_SIZE,
-        min_count=MIN_COUNT,
-        max_seq_len=MAX_SEQ_LEN,
+        max_vocab_size=max_vocab_size,
+        min_count=min_count,
+        max_seq_len=max_seq_len,
     )
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
-    train_loader = DataLoader(train_dataset, batch_size=LSTM_BATCH_SIZE, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=LSTM_BATCH_SIZE, shuffle=False)
+    # === 2. Chargement de GloVe (si pas déjà fourni) ===
+    if glove_embeddings is None:
+        if verbose:
+            print("\n--- Chargement de GloVe ---")
+        glove_embeddings = load_glove_embeddings(glove_path, embedding_dim)
+    elif verbose:
+        print("\n--- GloVe déjà chargé (réutilisation) ---")
 
-    # === 3. Chargement de GloVe ===
-    print("\n--- ÉTAPE 3 : Chargement de GloVe ---")
-    glove_embeddings = load_glove_embeddings(GLOVE_PATH, EMBEDDING_DIM)
-    embedding_matrix = build_embedding_matrix(vocab, glove_embeddings, EMBEDDING_DIM)
+    embedding_matrix = build_embedding_matrix(vocab, glove_embeddings, embedding_dim)
 
-    # === 4. Modèle ===
-    print("\n--- ÉTAPE 4 : Construction du modèle BiLSTM ---")
+    # === 3. Construction du modèle ===
+    if verbose:
+        print("\n--- Construction du BiLSTM ---")
     model = BiLSTMClassifier(
         vocab_size=len(vocab),
-        emb_dim=EMBEDDING_DIM,
-        hidden_dim=HIDDEN_DIM,
+        emb_dim=embedding_dim,
+        hidden_dim=hidden_dim,
         output_dim=len(REVIEW_CLASSES),
-        dropout_rate=DROPOUT_RATE,
+        dropout_rate=dropout_rate,
         pretrained_embeddings=embedding_matrix,
-        freeze_embeddings=False,  # fine-tuning des embeddings
+        freeze_embeddings=False,
     )
-
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"  → Paramètres entraînables : {n_params:,}")
+    if verbose:
+        print(f"  → Paramètres entraînables : {n_params:,}")
 
-    # === 5. Entraînement ===
-    print("\n--- ÉTAPE 5 : Entraînement ---")
+    # === 4. Entraînement ===
+    if verbose:
+        print("\n--- Entraînement ---")
     model, history = train(
         model,
         train_loader,
         val_loader=val_loader,
-        lr=LSTM_LEARNING_RATE,
-        epochs=LSTM_MAX_EPOCHS,
+        lr=learning_rate,
+        epochs=max_epochs,
         weight_decay=0.0,
         use_early_stopping=True,
     )
 
-    # === 6. Évaluation finale sur val ===
-    print("\n--- ÉTAPE 6 : Évaluation sur val ---")
+    # === 5. Évaluation sur val ===
     val_results = predict_on_dataloader(model, val_loader)
     val_metrics = compute_metrics(val_results)
-    print(f"Métriques val : accuracy={val_metrics['accuracy']:.4f} "
-          f"| f1={val_metrics['f1']:.4f}")
+    if verbose:
+        print(f"\nMétriques val : accuracy={val_metrics['accuracy']:.4f} "
+              f"| f1={val_metrics['f1']:.4f}")
 
-    # === 7. Sauvegarde (si production) ===
-    if SAVE_AS_PRODUCTION:
+    # === 6. Sauvegarde (si production) ===
+    if save_as_production_model:
         MODELS_DIR.mkdir(parents=True, exist_ok=True)
         torch.save(model.state_dict(), MODELS_DIR / "lstm_classifier.pt")
         with open(MODELS_DIR / "lstm_vocab.pkl", "wb") as f:
             pickle.dump(vocab, f)
-        print(f"\nModèle LSTM sauvegardé dans {MODELS_DIR / 'lstm_classifier.pt'}")
+        if verbose:
+            print(f"Modèle LSTM sauvegardé : {MODELS_DIR / 'lstm_classifier.pt'}")
 
-    # === 8. Logging ===
+    # === 7. Logging ===
     OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
     experiment = {
-        "name": EXPERIMENT_NAME,
+        "name": experiment_name,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "dataset": "imdb",
         "splits": {
@@ -183,11 +209,12 @@ def main() -> None:
             "type": "bilstm",
             "feature_type": "word_sequences",
             "vocab_size": len(vocab),
-            "max_seq_len": MAX_SEQ_LEN,
-            "embedding_dim": EMBEDDING_DIM,
-            "hidden_dim": HIDDEN_DIM,
+            "max_vocab_size": max_vocab_size,
+            "max_seq_len": max_seq_len,
+            "embedding_dim": embedding_dim,
+            "hidden_dim": hidden_dim,
             "bidirectional": True,
-            "dropout_rate": DROPOUT_RATE,
+            "dropout_rate": dropout_rate,
             "pretrained_embeddings": "GloVe 6B.100d",
             "freeze_embeddings": False,
             "n_trainable_params": n_params,
@@ -195,13 +222,13 @@ def main() -> None:
         "preprocessing": {
             "lowercase": True,
             "remove_punctuation": True,
-            "min_count": MIN_COUNT,
+            "min_count": min_count,
         },
         "training": {
-            "batch_size": LSTM_BATCH_SIZE,
-            "max_epochs": LSTM_MAX_EPOCHS,
+            "batch_size": batch_size,
+            "max_epochs": max_epochs,
             "epochs_run": len(history["train_loss"]),
-            "learning_rate": LSTM_LEARNING_RATE,
+            "learning_rate": learning_rate,
             "optimizer": "Adam",
             "loss": "CrossEntropyLoss",
             "weight_decay": 0.0,
@@ -216,12 +243,37 @@ def main() -> None:
         },
         "val_metrics": val_metrics,
         "loss_history": history,
-        "saved_as_production": SAVE_AS_PRODUCTION,
+        "saved_as_production": save_as_production_model,
     }
     log_experiment(experiment)
 
+    return experiment
+
+
+# ============================================================================
+# Pipeline principal (un seul run avec les paramètres par défaut)
+# ============================================================================
+def main() -> None:
+    random.seed(RANDOM_SEED)
+    torch.manual_seed(TORCH_SEED)
+
+    print("=" * 60)
+    print("ENTRAÎNEMENT LSTM (UN SEUL RUN)")
+    print("=" * 60)
+    train_data, val_data, test_data = load_imdb_splits()
+    describe_splits(train_data, val_data, test_data)
+
+    run_lstm_experiment(
+        experiment_name="bilstm_glove_30k",
+        train_data=train_data,
+        val_data=val_data,
+        test_data=test_data,
+        max_vocab_size=30000,
+        save_as_production_model=False,
+    )
+
     print("\n" + "=" * 60)
-    print("ENTRAÎNEMENT LSTM TERMINÉ")
+    print("ENTRAÎNEMENT TERMINÉ")
     print("=" * 60)
 
 
