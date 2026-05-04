@@ -299,5 +299,221 @@
       ]
     },
     "saved_as_production": false
+  },
+  {
+    "name": "bigram_mincount_3",
+    "timestamp": "2026-05-04T01:35:11.619152+00:00",
+    "dataset": "imdb",
+    "splits": {
+      "train": 22000,
+      "val": 3000,
+      "test": 25000
+    },
+    "model": {
+      "type": "logistic_regression",
+      "features": "2-grams (count)",
+      "vocab_size": 214756,
+      "vocab_strategy": "min_count",
+      "vocab_param": 3
+    },
+    "preprocessing": {
+      "lowercase": true,
+      "remove_punctuation": true,
+      "stop_words_removed": false,
+      "lemmatization": false
+    },
+    "training": {
+      "batch_size": 32,
+      "epochs": 5,
+      "learning_rate": 0.001,
+      "optimizer": "Adam",
+      "loss": "CrossEntropyLoss",
+      "weight_decay": 0.0
+    },
+    "val_metrics": {
+      "accuracy": 0.9067,
+      "precision": 0.9094,
+      "recall": 0.9033,
+      "f1": 0.9064
+    },
+    "loss_history": {
+      "train_loss": [
+        0.3725,
+        0.1095,
+        0.055,
+        0.0324,
+        0.0207
+      ],
+      "val_loss": [
+        0.2737,
+        0.2461,
+        0.2374,
+        0.2358,
+        0.2353
+      ]
+    },
+    "saved_as_production": false
+  },
+  {
+    "name": "bigram_mincount_5",
+    "timestamp": "2026-05-04T01:44:35.246680+00:00",
+    "dataset": "imdb",
+    "splits": {
+      "train": 22000,
+      "val": 3000,
+      "test": 25000
+    },
+    "model": {
+      "type": "logistic_regression",
+      "features": "2-grams (count)",
+      "vocab_size": 121350,
+      "vocab_strategy": "min_count",
+      "vocab_param": 5
+    },
+    "preprocessing": {
+      "lowercase": true,
+      "remove_punctuation": true,
+      "stop_words_removed": false,
+      "lemmatization": false
+    },
+    "training": {
+      "batch_size": 32,
+      "epochs": 5,
+      "learning_rate": 0.001,
+      "optimizer": "Adam",
+      "loss": "CrossEntropyLoss",
+      "weight_decay": 0.0
+    },
+    "val_metrics": {
+      "accuracy": 0.9007,
+      "precision": 0.8996,
+      "recall": 0.902,
+      "f1": 0.9008
+    },
+    "loss_history": {
+      "train_loss": [
+        0.3772,
+        0.1326,
+        0.0719,
+        0.0439,
+        0.0287
+      ],
+      "val_loss": [
+        0.2764,
+        0.2501,
+        0.2421,
+        0.2407,
+        0.2417
+      ]
+    },
+    "saved_as_production": false
+  },
+  {
+    "name": "bigram_mincount_10",
+    "timestamp": "2026-05-04T01:53:15.142429+00:00",
+    "dataset": "imdb",
+    "splits": {
+      "train": 22000,
+      "val": 3000,
+      "test": 25000
+    },
+    "model": {
+      "type": "logistic_regression",
+      "features": "2-grams (count)",
+      "vocab_size": 59274,
+      "vocab_strategy": "min_count",
+      "vocab_param": 10
+    },
+    "preprocessing": {
+      "lowercase": true,
+      "remove_punctuation": true,
+      "stop_words_removed": false,
+      "lemmatization": false
+    },
+    "training": {
+      "batch_size": 32,
+      "epochs": 5,
+      "learning_rate": 0.001,
+      "optimizer": "Adam",
+      "loss": "CrossEntropyLoss",
+      "weight_decay": 0.0
+    },
+    "val_metrics": {
+      "accuracy": 0.892,
+      "precision": 0.8989,
+      "recall": 0.8833,
+      "f1": 0.8911
+    },
+    "loss_history": {
+      "train_loss": [
+        0.3851,
+        0.1663,
+        0.1014,
+        0.067,
+        0.0462
+      ],
+      "val_loss": [
+        0.2856,
+        0.26,
+        0.2537,
+        0.2543,
+        0.259
+      ]
+    },
+    "saved_as_production": false
+  },
+  {
+    "name": "bigram_mincount_20",
+    "timestamp": "2026-05-04T02:00:13.405123+00:00",
+    "dataset": "imdb",
+    "splits": {
+      "train": 22000,
+      "val": 3000,
+      "test": 25000
+    },
+    "model": {
+      "type": "logistic_regression",
+      "features": "2-grams (count)",
+      "vocab_size": 29298,
+      "vocab_strategy": "min_count",
+      "vocab_param": 20
+    },
+    "preprocessing": {
+      "lowercase": true,
+      "remove_punctuation": true,
+      "stop_words_removed": false,
+      "lemmatization": false
+    },
+    "training": {
+      "batch_size": 32,
+      "epochs": 5,
+      "learning_rate": 0.001,
+      "optimizer": "Adam",
+      "loss": "CrossEntropyLoss",
+      "weight_decay": 0.0
+    },
+    "val_metrics": {
+      "accuracy": 0.8893,
+      "precision": 0.9022,
+      "recall": 0.8733,
+      "f1": 0.8875
+    },
+    "loss_history": {
+      "train_loss": [
+        0.3973,
+        0.2062,
+        0.1422,
+        0.1044,
+        0.0791
+      ],
+      "val_loss": [
+        0.3015,
+        0.2722,
+        0.2651,
+        0.2678,
+        0.2757
+      ]
+    },
+    "saved_as_production": false
   }
 ]

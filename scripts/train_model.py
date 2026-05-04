@@ -39,12 +39,15 @@ from nlp_sentiment.config import (
 from nlp_sentiment.data import describe_splits, load_imdb_splits
 from nlp_sentiment.evaluate import compute_metrics, predict_on_dataloader
 from nlp_sentiment.models import LogisticRegression
+
+from nlp_sentiment.train import train
+
 from nlp_sentiment.preprocessor import (
     NgramReviewDataset,
     build_ngram_vocab,
+    build_ngram_vocab_min_count,
     preprocess,
 )
-from nlp_sentiment.train import train
 
 
 # ============================================================================
@@ -74,6 +77,8 @@ def run_experiment(
     val_data: list[tuple[str, str]],
     test_data: list[tuple[str, str]],
     ngram_n: int = 2,
+    vocab_strategy: str = "top_k",
+    vocab_param: int = MAX_VOCAB_SIZE,
     weight_decay: float = 0.0,
     save_as_production_model: bool = False,
     verbose: bool = True,
@@ -109,13 +114,26 @@ def run_experiment(
 
     # Vocabulaire (depuis le train uniquement)
     if verbose:
-        print(f"Construction du vocabulaire {ngram_n}-grammes...")
-    ngram_vocab = build_ngram_vocab(
-        tokenized_train, n=ngram_n, max_size=MAX_VOCAB_SIZE
-    )
+        print(f"Construction du vocabulaire {ngram_n}-grammes "
+              f"(stratégie={vocab_strategy}, paramètre={vocab_param})...")
+
+    if vocab_strategy == "top_k":
+        ngram_vocab = build_ngram_vocab(
+            tokenized_train, n=ngram_n, max_size=vocab_param
+        )
+    elif vocab_strategy == "min_count":
+        ngram_vocab = build_ngram_vocab_min_count(
+            tokenized_train, n=ngram_n, min_count=vocab_param
+        )
+    else:
+        raise ValueError(
+            f"vocab_strategy inconnue : {vocab_strategy}. "
+            f"Utilisez 'top_k' ou 'min_count'."
+        )
+
     if verbose:
         print(f"  → {len(ngram_vocab)} {ngram_n}-grammes uniques.")
-
+        
     # DataLoaders
     train_torch_ds = NgramReviewDataset(tokenized_train, ngram_vocab, n=ngram_n)
     val_torch_ds = NgramReviewDataset(tokenized_val, ngram_vocab, n=ngram_n)
@@ -167,7 +185,8 @@ def run_experiment(
             "type": "logistic_regression",
             "features": f"{ngram_n}-grams (count)",
             "vocab_size": len(ngram_vocab),
-            "max_vocab_size": MAX_VOCAB_SIZE,
+            "vocab_strategy": vocab_strategy,
+            "vocab_param": vocab_param,
         },
         "preprocessing": {
             "lowercase": True,

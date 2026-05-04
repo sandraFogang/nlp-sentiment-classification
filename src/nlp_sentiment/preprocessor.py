@@ -67,6 +67,41 @@ def build_ngram_vocab(
     most_common = counter.most_common(max_size)
     return [ngram for ngram, _ in most_common]
 
+def build_ngram_vocab_min_count(
+    tokenized_reviews: list[tuple[list[str], str]],
+    n: int,
+    min_count: int,
+) -> list[tuple]:
+    """
+    Construit un vocabulaire de n-grammes par seuil de fréquence minimale.
+
+    Garde tous les n-grammes apparaissant au moins `min_count` fois dans
+    le corpus, sans limite supérieure sur la taille du vocabulaire.
+
+    Cette stratégie est souvent préférable à `build_ngram_vocab` (top-K)
+    car elle élimine le bruit statistique des n-grammes ultra-rares
+    sans imposer de seuil arbitraire sur la taille.
+
+    Args:
+        tokenized_reviews: Liste de tuples (tokens, classe).
+        n: Taille des n-grammes.
+        min_count: Fréquence minimale requise (un n-gramme vu < min_count fois
+                   dans le corpus est exclu).
+
+    Returns:
+        Liste des n-grammes retenus, triés par fréquence décroissante.
+    """
+    counter = Counter()
+    for tokens, _ in tokenized_reviews:
+        ngrams = [tuple(tokens[i : i + n]) for i in range(len(tokens) - n + 1)]
+        counter.update(ngrams)
+
+    # Garde tous les n-grammes vus au moins min_count fois
+    filtered = [(ngram, count) for ngram, count in counter.items() if count >= min_count]
+    # Trie par fréquence décroissante (cohérent avec build_ngram_vocab)
+    filtered.sort(key=lambda x: x[1], reverse=True)
+
+    return [ngram for ngram, _ in filtered]
 
 def build_lstm_vocab(
     tokenized_reviews: list[tuple[list[str], str]],
