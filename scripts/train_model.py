@@ -4,7 +4,7 @@ train_model.py — Script d'entraînement et d'évaluation sur le val set.
 Ce script entraîne UN modèle avec des hyperparamètres fixes et
 optionnellement le sauvegarde comme modèle de production.
 
-Pour comparer plusieurs hyperparamètres, voir scripts/sweep_l2.py.
+Pour comparer plusieurs hyperparamètres, voir scripts/sweep_*.py.
 
 Usage :
     python scripts/train_model.py
@@ -41,15 +41,14 @@ from nlp_sentiment.config import (
 from nlp_sentiment.data import describe_splits, load_imdb_splits
 from nlp_sentiment.evaluate import compute_metrics, predict_on_dataloader
 from nlp_sentiment.models import LogisticRegression
-
-from nlp_sentiment.train import train
-
 from nlp_sentiment.preprocessor import (
     NgramReviewDataset,
+    TfidfReviewDataset,
     build_ngram_vocab,
     build_ngram_vocab_min_count,
     preprocess,
 )
+from nlp_sentiment.train import train
 
 
 # ============================================================================
@@ -61,14 +60,14 @@ def log_experiment(experiment: dict) -> None:
 
     if EXPERIMENTS_PATH.exists():
         with open(EXPERIMENTS_PATH, "r", encoding="utf-8") as f:
-            history = json.load(f)
+            history_log = json.load(f)
     else:
-        history = []
+        history_log = []
 
-    history.append(experiment)
+    history_log.append(experiment)
 
     with open(EXPERIMENTS_PATH, "w", encoding="utf-8") as f:
-        json.dump(history, f, indent=2, ensure_ascii=False)
+        json.dump(history_log, f, indent=2, ensure_ascii=False)
 
     print(f"\nExpérience enregistrée : {EXPERIMENTS_PATH}")
 
@@ -81,6 +80,9 @@ def run_experiment(
     ngram_n: int = 2,
     vocab_strategy: str = "top_k",
     vocab_param: int = MAX_VOCAB_SIZE,
+    feature_type: str = "count",
+    ngram_range: tuple[int, int] = (2, 2),
+    sublinear_tf: bool = False,
     weight_decay: float = 0.0,
     max_epochs: int = MAX_EPOCHS,
     use_early_stopping: bool = True,
@@ -88,18 +90,22 @@ def run_experiment(
     verbose: bool = True,
 ) -> dict:
     """
-    Entraîne et évalue un modèle bigramme avec les hyperparamètres donnés.
-
-    Cette fonction est appelée par main() (un seul run) et par sweep_l2.py
-    (plusieurs runs avec des weight_decay différents).
+    Entraîne et évalue un modèle (n-grammes count ou TF-IDF).
 
     Args:
         experiment_name: Identifiant unique de l'expérience.
         train_data, val_data, test_data: Splits IMDB.
-        ngram_n: 1 = unigrammes, 2 = bigrammes, 3 = trigrammes.
-        weight_decay: Coefficient de régularisation L2.
-        save_as_production_model: Si True, sauvegarde dans models/.
-        verbose: Si True, affiche les étapes en console.
+        ngram_n: 1=unigrammes, 2=bigrammes (mode count uniquement).
+        vocab_strategy: 'top_k' ou 'min_count' (mode count uniquement).
+        vocab_param: max_size (top_k), min_count (min_count) ou min_df (tfidf).
+        feature_type: 'count' ou 'tfidf'.
+        ngram_range: ex (1,2) pour uni+bi (mode tfidf uniquement).
+        sublinear_tf: applique log(1+TF) (mode tfidf uniquement).
+        weight_decay: Régularisation L2.
+        max_epochs: Nb max d'époques (early stopping peut arrêter plus tôt).
+        use_early_stopping: Active l'early stopping.
+        save_as_production_model: Sauvegarde dans models/ comme prod.
+        verbose: Affiche les étapes.
 
     Returns:
         Le dict de l'expérience (logué dans experiments.json).
@@ -110,47 +116,84 @@ def run_experiment(
         print(f"# weight_decay = {weight_decay}")
         print(f"{'#' * 60}")
 
-    # Tokenisation
+    # === Tokenisation ===
     if verbose:
         print("\nTokenisation du train et du val...")
     tokenized_train = [(preprocess(text), label) for text, label in train_data]
     tokenized_val = [(preprocess(text), label) for text, label in val_data]
 
-    # Vocabulaire (depuis le train uniquement)
-    if verbose:
-        print(f"Construction du vocabulaire {ngram_n}-grammes "
-              f"(stratégie={vocab_strategy}, paramètre={vocab_param})...")
+    # === Construction des features (deux modes) ===
+    ngram_vocab = None  # utilisé uniquement en mode count, sera None en tfidf
 
-    if vocab_strategy == "top_k":
-        ngram_vocab = build_ngram_vocab(
-            tokenized_train, n=ngram_n, max_size=vocab_param
+    if feature_type == "count":
+        if verbose:
+            print(f"Construction du vocabulaire {ngram_n}-grammes "
+                  f"(stratégie={vocab_strategy}, paramètre={vocab_param})...")
+
+        if vocab_strategy == "top_k":
+            ngram_vocab = build_ngram_vocab(
+                tokenized_train, n=ngram_n, max_size=vocab_param
+            )
+        elif vocab_strategy == "min_count":
+            ngram_vocab = build_ngram_vocab_min_count(
+                tokenized_train, n=ngram_n, min_count=vocab_param
+            )
+        else:
+            raise ValueError(
+                f"vocab_strategy inconnue : {vocab_strategy}. "
+                f"Utilisez 'top_k' ou 'min_count'."
+            )
+
+        if verbose:
+            print(f"  → {len(ngram_vocab)} {ngram_n}-grammes uniques.")
+
+        train_torch_ds = NgramReviewDataset(tokenized_train, ngram_vocab, n=ngram_n)
+        val_torch_ds = NgramReviewDataset(tokenized_val, ngram_vocab, n=ngram_n)
+        vocab_size = len(ngram_vocab)
+
+    elif feature_type == "tfidf":
+        if verbose:
+            print(f"Construction des features TF-IDF "
+                  f"(ngram_range={ngram_range}, min_df={vocab_param}, "
+                  f"sublinear_tf={sublinear_tf})...")
+
+        train_torch_ds = TfidfReviewDataset(
+            tokenized_train,
+            vectorizer=None,
+            ngram_range=ngram_range,
+            min_df=vocab_param,
+            sublinear_tf=sublinear_tf,
         )
-    elif vocab_strategy == "min_count":
-        ngram_vocab = build_ngram_vocab_min_count(
-            tokenized_train, n=ngram_n, min_count=vocab_param
+        val_torch_ds = TfidfReviewDataset(
+            tokenized_val,
+            vectorizer=train_torch_ds.vectorizer,
+            ngram_range=ngram_range,
+            min_df=vocab_param,
+            sublinear_tf=sublinear_tf,
         )
+        vocab_size = train_torch_ds.vocab_size
+
+        if verbose:
+            print(f"  → {vocab_size} features TF-IDF.")
     else:
         raise ValueError(
-            f"vocab_strategy inconnue : {vocab_strategy}. "
-            f"Utilisez 'top_k' ou 'min_count'."
+            f"feature_type inconnu : {feature_type}. "
+            f"Utilisez 'count' ou 'tfidf'."
         )
 
-    if verbose:
-        print(f"  → {len(ngram_vocab)} {ngram_n}-grammes uniques.")
-        
-    # DataLoaders
-    train_torch_ds = NgramReviewDataset(tokenized_train, ngram_vocab, n=ngram_n)
-    val_torch_ds = NgramReviewDataset(tokenized_val, ngram_vocab, n=ngram_n)
+    # === DataLoaders ===
     train_loader = DataLoader(train_torch_ds, batch_size=BATCH_SIZE, shuffle=True)
     val_loader = DataLoader(val_torch_ds, batch_size=BATCH_SIZE, shuffle=False)
 
-    # Modèle et entraînement
-    if verbose:
-        print(f"\nEntraînement (weight_decay={weight_decay})...")
+    # === Modèle ===
     model = LogisticRegression(
-        input_dim=len(ngram_vocab),
+        input_dim=vocab_size,
         output_dim=len(REVIEW_CLASSES),
     )
+
+    # === Entraînement ===
+    if verbose:
+        print(f"\nEntraînement (weight_decay={weight_decay})...")
     model, history = train(
         model,
         train_loader,
@@ -160,7 +203,7 @@ def run_experiment(
         use_early_stopping=use_early_stopping,
     )
 
-    # Évaluation sur val
+    # === Évaluation sur val ===
     val_results = predict_on_dataloader(model, val_loader)
     val_metrics = compute_metrics(val_results)
 
@@ -168,16 +211,22 @@ def run_experiment(
         print(f"\nMétriques val : accuracy={val_metrics['accuracy']:.4f} "
               f"| f1={val_metrics['f1']:.4f}")
 
-    # Sauvegarde du modèle si production
+    # === Sauvegarde du modèle (production) ===
     if save_as_production_model:
         MODELS_DIR.mkdir(parents=True, exist_ok=True)
         torch.save(model.state_dict(), MODEL_PATH)
-        with open(VOCAB_PATH, "wb") as f:
-            pickle.dump(ngram_vocab, f)
+
+        if feature_type == "count":
+            with open(VOCAB_PATH, "wb") as f:
+                pickle.dump(ngram_vocab, f)
+        elif feature_type == "tfidf":
+            with open(VOCAB_PATH, "wb") as f:
+                pickle.dump(train_torch_ds.vectorizer, f)
+
         if verbose:
             print(f"Modèle sauvegardé comme production : {MODEL_PATH}")
 
-    # Construction du dict d'expérience
+    # === Logging de l'expérience ===
     experiment = {
         "name": experiment_name,
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -189,10 +238,16 @@ def run_experiment(
         },
         "model": {
             "type": "logistic_regression",
-            "features": f"{ngram_n}-grams (count)",
-            "vocab_size": len(ngram_vocab),
+            "feature_type": feature_type,
+            "features": (
+                f"{ngram_range[0]}-{ngram_range[1]}-grams ({feature_type})"
+                if feature_type == "tfidf"
+                else f"{ngram_n}-grams (count)"
+            ),
+            "vocab_size": vocab_size,
             "vocab_strategy": vocab_strategy,
             "vocab_param": vocab_param,
+            "sublinear_tf": sublinear_tf if feature_type == "tfidf" else None,
         },
         "preprocessing": {
             "lowercase": True,
@@ -232,22 +287,23 @@ def main() -> None:
     random.seed(RANDOM_SEED)
     torch.manual_seed(TORCH_SEED)
 
-    # Chargement IMDB
     print("=" * 60)
     print("Chargement IMDB (train + val + test)")
     print("=" * 60)
     train_data, val_data, test_data = load_imdb_splits()
     describe_splits(train_data, val_data, test_data)
 
-    # Run unique avec les paramètres par défaut
     run_experiment(
         experiment_name="bigram_baseline_imdb",
         train_data=train_data,
         val_data=val_data,
         test_data=test_data,
         ngram_n=2,
+        vocab_strategy="min_count",
+        vocab_param=3,
+        feature_type="count",
         weight_decay=0.0,
-        save_as_production_model=True,
+        save_as_production_model=False,
     )
 
 

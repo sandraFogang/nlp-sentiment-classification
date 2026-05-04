@@ -6,11 +6,13 @@ Ce module contient :
 - La construction de vocabulaires de n-grammes (uni/bi/tri)
 - Les classes Dataset pour les classificateurs n-grammes et LSTM
 """
+
 import re
 import string
 from collections import Counter
 
 import torch
+from sklearn.feature_extraction.text import TfidfVectorizer
 from torch.utils.data import Dataset
 
 from nlp_sentiment.config import REVIEW_CLASSES
@@ -211,3 +213,71 @@ class LSTMReviewDataset(Dataset):
 
         label = class_to_onehot(class_label)
         return feature, label, idx
+    
+class TfidfReviewDataset(Dataset):
+    """
+    Dataset PyTorch utilisant des features TF-IDF (au lieu du simple comptage).
+
+    Cette classe utilise le TfidfVectorizer de scikit-learn, qui est :
+    - Optimisé en C (très rapide)
+    - Le standard académique pour les features TF-IDF
+    - Compatible avec les n-grammes (ngram_range=(1,2) pour uni+bi)
+
+    Le vectorizer est fitté UNE FOIS sur le train et réutilisé sur le val/test
+    pour éviter toute fuite d'information.
+    """
+
+    def __init__(
+        self,
+        tokenized_reviews: list[tuple[list[str], str]],
+        vectorizer: TfidfVectorizer | None = None,
+        ngram_range: tuple[int, int] = (2, 2),
+        min_df: int = 3,
+        sublinear_tf: bool = False,
+    ):
+        """
+        Args:
+            tokenized_reviews: Liste de tuples (tokens, classe).
+            vectorizer: TfidfVectorizer pré-fitté (None pour le train, fourni pour val/test).
+            ngram_range: (1,1) = unigrammes, (2,2) = bigrammes, (1,2) = uni+bi.
+            min_df: Fréquence minimale des n-grammes (équivalent à notre min_count).
+            sublinear_tf: Si True, applique log(1 + TF) au lieu de TF (utile pour textes longs).
+        """
+        self.tokenized_reviews = tokenized_reviews
+
+        # Reconstruire le texte depuis les tokens (TfidfVectorizer attend des strings)
+        texts = [" ".join(tokens) for tokens, _ in tokenized_reviews]
+
+        if vectorizer is None:
+            # Premier appel (train) : on fit le vectorizer
+            self.vectorizer = TfidfVectorizer(
+                ngram_range=ngram_range,
+                min_df=min_df,
+                sublinear_tf=sublinear_tf,
+                token_pattern=r"\S+",  # nos tokens sont déjà nettoyés
+            )
+            self.features = self.vectorizer.fit_transform(texts)
+        else:
+            # Appels suivants (val/test) : on réutilise le vectorizer du train
+            self.vectorizer = vectorizer
+            self.features = self.vectorizer.transform(texts)
+
+    def __len__(self) -> int:
+        return len(self.tokenized_reviews)
+
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, int]:
+        # Conversion sparse → dense pour PyTorch
+        feature = torch.tensor(
+            self.features[idx].toarray()[0],
+            dtype=torch.float32,
+        )
+
+        _, class_label = self.tokenized_reviews[idx]
+        label = class_to_onehot(class_label)
+
+        return feature, label, idx
+
+    @property
+    def vocab_size(self) -> int:
+        """Taille du vocabulaire appris par le vectorizer."""
+        return len(self.vectorizer.vocabulary_)
