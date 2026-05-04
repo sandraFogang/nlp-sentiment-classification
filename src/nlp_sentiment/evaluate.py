@@ -101,3 +101,42 @@ def compute_metrics(results: list[dict]) -> dict[str, float]:
         "recall": round(recall, 4),
         "f1": round(f1, 4),
     }
+    
+def compute_loss(
+    model: nn.Module,
+    dataloader: DataLoader,
+    device: torch.device = DEVICE,
+) -> float:
+    """
+    Calcule la loss moyenne du modèle sur un DataLoader.
+
+    Cette fonction ne modifie pas les poids du modèle (mode eval + no_grad).
+    Utilisée pour mesurer la val loss sans déranger l'entraînement.
+
+    Args:
+        model: Modèle PyTorch.
+        dataloader: DataLoader sur lequel calculer la loss.
+        device: 'cpu' ou 'cuda'.
+
+    Returns:
+        Loss moyenne sur l'ensemble du DataLoader.
+    """
+    model = model.to(device)
+    model.eval()
+    criterion = nn.CrossEntropyLoss()
+
+    total_loss = 0.0
+    n_batches = 0
+
+    with torch.no_grad():
+        for batch_inputs, batch_labels, _ in dataloader:
+            batch_inputs = batch_inputs.to(device)
+            batch_labels = batch_labels.to(device).argmax(dim=1)
+
+            logits = model(batch_inputs)
+            loss = criterion(logits, batch_labels)
+
+            total_loss += loss.item()
+            n_batches += 1
+
+    return total_loss / n_batches if n_batches > 0 else 0.0
