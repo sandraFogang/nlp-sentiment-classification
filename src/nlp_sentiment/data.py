@@ -52,16 +52,18 @@ def load_imdb_splits() -> tuple[
     dataset = load_dataset(DATASET_NAME, cache_dir=str(HF_CACHE_DIR))
 
     # === Test set : tel quel, on n'y touche pas ===
-    test_texts = dataset["test"]["text"]
-    test_labels = dataset["test"]["label"]
+    test_texts = list(dataset["test"]["text"])
+    test_labels = list(dataset["test"]["label"])
     test = [
         (text, _label_int_to_str(label))
         for text, label in zip(test_texts, test_labels)
     ]
 
     # === Train + Val : on split le train officiel ===
-    train_texts_full = dataset["train"]["text"]
-    train_labels_full = dataset["train"]["label"]
+    # IMPORTANT : on convertit en listes Python natives AVANT le split
+    # (les versions récentes de `datasets` ne supportent pas les indices numpy)
+    train_texts_full = list(dataset["train"]["text"])
+    train_labels_full = list(dataset["train"]["label"])
 
     # Split stratifié reproductible
     train_texts, val_texts, train_labels, val_labels = train_test_split(
@@ -71,7 +73,6 @@ def load_imdb_splits() -> tuple[
         random_state=RANDOM_SEED,
         stratify=train_labels_full,
     )
-
     train = [
         (text, _label_int_to_str(label))
         for text, label in zip(train_texts, train_labels)
