@@ -194,3 +194,118 @@ class BiLSTMClassifier(nn.Module):
         logits = self.fc(h_concat)
 
         return logits
+    
+    
+class BiLSTMClassifierV2(nn.Module):
+    """
+    Classificateur BiLSTM amélioré (V2) avec :
+    - Hidden dim configurable (par défaut 256)
+    - Nombre de couches LSTM configurable (par défaut 2, avec dropout entre les couches)
+    - Pooling configurable : 'last' (dernier état caché), 'mean' ou 'max'
+
+    Cette classe est utilisée pour l'ablation Levier 2 du portfolio.
+
+    Args:
+        vocab_size: Taille du vocabulaire.
+        emb_dim: Dimension des embeddings.
+        hidden_dim: Dimension de l'état caché par direction.
+        num_layers: Nombre de couches LSTM (1 ou 2 typiquement).
+        output_dim: Nombre de classes (2).
+        dropout_rate: Dropout sur les embeddings et avant la classification.
+        lstm_dropout: Dropout entre les couches LSTM (ignoré si num_layers=1).
+        pooling: 'last' (dernier état), 'mean' (moyenne) ou 'max' (max sur séquence).
+        pretrained_embeddings: Tenseur pour init GloVe.
+        freeze_embeddings: Si True, embeddings non entraînés.
+    """
+
+    VALID_POOLINGS = {"last", "mean", "max"}
+
+    def __init__(
+        self,
+        vocab_size: int,
+        emb_dim: int = 100,
+        hidden_dim: int = 256,
+        num_layers: int = 2,
+        output_dim: int = 2,
+        dropout_rate: float = 0.3,
+        lstm_dropout: float = 0.3,
+        pooling: str = "mean",
+        pretrained_embeddings: torch.Tensor | None = None,
+        freeze_embeddings: bool = False,
+    ):
+        super().__init__()
+
+        if pooling not in self.VALID_POOLINGS:
+            raise ValueError(
+                f"pooling doit être l'un de {self.VALID_POOLINGS}, "
+                f"reçu : {pooling}"
+            )
+
+        self.vocab_size = vocab_size
+        self.emb_dim = emb_dim
+        self.hidden_dim = hidden_dim
+        self.num_layers = num_layers
+        self.pooling = pooling
+
+        # === Embedding ===
+        self.embeddings = nn.Embedding(vocab_size, emb_dim, padding_idx=0)
+        if pretrained_embeddings is not None:
+            assert pretrained_embeddings.shape == (vocab_size, emb_dim)
+            self.embeddings.weight.data.copy_(pretrained_embeddings)
+            if freeze_embeddings:
+                self.embeddings.weight.requires_grad = False
+
+        self.embedding_dropout = nn.Dropout(dropout_rate)
+
+        # === LSTM bidirectionnel multi-couches ===
+        # PyTorch applique automatiquement le dropout entre les couches LSTM
+        # si num_layers > 1
+        self.lstm = nn.LSTM(
+            input_size=emb_dim,
+            hidden_size=hidden_dim,
+            num_layers=num_layers,
+            bidirectional=True,
+            batch_first=True,
+            dropout=lstm_dropout if num_layers > 1 else 0.0,
+        )
+
+        self.output_dropout = nn.Dropout(dropout_rate)
+
+        # 2 * hidden_dim car bidirectionnel (concat des 2 directions)
+        self.fc = nn.Linear(2 * hidden_dim, output_dim)
+
+    def forward(self, input_seq: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            input_seq: (batch, seq_len) indices de mots.
+
+        Returns:
+            Logits (batch, output_dim).
+        """
+        # (batch, seq) -> (batch, seq, emb_dim)
+        embedded = self.embeddings(input_seq)
+        embedded = self.embedding_dropout(embedded)
+
+        # output : (batch, seq, 2 * hidden_dim)
+        # h_n   : (2 * num_layers, batch, hidden_dim)
+        output, (h_n, _) = self.lstm(embedded)
+
+        # === Pooling ===
+        if self.pooling == "last":
+            # Concat des derniers états cachés des 2 directions de la dernière couche
+            # h_n[-2] = forward dernière couche, h_n[-1] = backward dernière couche
+            pooled = torch.cat([h_n[-2], h_n[-1]], dim=1)
+        elif self.pooling == "mean":
+            # Moyenne sur la dimension séquence
+            # Note : on ignore les positions PAD pour un mean exact
+            mask = (input_seq != 0).float().unsqueeze(-1)  # (batch, seq, 1)
+            pooled = (output * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)
+        elif self.pooling == "max":
+            # Max sur la dimension séquence (en ignorant les PAD)
+            mask = (input_seq != 0).unsqueeze(-1)  # (batch, seq, 1)
+            output_masked = output.masked_fill(~mask, float("-inf"))
+            pooled, _ = output_masked.max(dim=1)
+
+        pooled = self.output_dropout(pooled)
+        logits = self.fc(pooled)
+        return logits

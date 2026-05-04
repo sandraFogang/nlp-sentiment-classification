@@ -40,7 +40,7 @@ from nlp_sentiment.data import describe_splits, load_imdb_splits
 from nlp_sentiment.evaluate import compute_metrics, predict_on_dataloader
 from nlp_sentiment.glove_utils import build_embedding_matrix, load_glove_embeddings
 from nlp_sentiment.lstm_data import prepare_lstm_data
-from nlp_sentiment.models import BiLSTMClassifier
+from nlp_sentiment.models import BiLSTMClassifier, BiLSTMClassifierV2
 from nlp_sentiment.train import train
 
 
@@ -94,6 +94,10 @@ def run_lstm_experiment(
     max_epochs: int = DEFAULT_MAX_EPOCHS,
     glove_embeddings: dict[str, torch.Tensor] | None = None,
     glove_path: Path = DEFAULT_GLOVE_PATH,
+    model_version: str = "v1",
+    num_layers: int = 1,
+    pooling: str = "last",
+    lstm_dropout: float = 0.3,
     save_as_production_model: bool = False,
     verbose: bool = True,
 ) -> dict:
@@ -148,19 +152,38 @@ def run_lstm_experiment(
         print("\n--- GloVe déjà chargé (réutilisation) ---")
 
     embedding_matrix = build_embedding_matrix(vocab, glove_embeddings, embedding_dim)
-
-    # === 3. Construction du modèle ===
+# === 3. Construction du modèle (V1 ou V2) ===
     if verbose:
-        print("\n--- Construction du BiLSTM ---")
-    model = BiLSTMClassifier(
-        vocab_size=len(vocab),
-        emb_dim=embedding_dim,
-        hidden_dim=hidden_dim,
-        output_dim=len(REVIEW_CLASSES),
-        dropout_rate=dropout_rate,
-        pretrained_embeddings=embedding_matrix,
-        freeze_embeddings=False,
-    )
+        print(f"\n--- Construction du BiLSTM ({model_version}) ---")
+
+    if model_version == "v1":
+        model = BiLSTMClassifier(
+            vocab_size=len(vocab),
+            emb_dim=embedding_dim,
+            hidden_dim=hidden_dim,
+            output_dim=len(REVIEW_CLASSES),
+            dropout_rate=dropout_rate,
+            pretrained_embeddings=embedding_matrix,
+            freeze_embeddings=False,
+        )
+    elif model_version == "v2":
+        model = BiLSTMClassifierV2(
+            vocab_size=len(vocab),
+            emb_dim=embedding_dim,
+            hidden_dim=hidden_dim,
+            num_layers=num_layers,
+            output_dim=len(REVIEW_CLASSES),
+            dropout_rate=dropout_rate,
+            lstm_dropout=lstm_dropout,
+            pooling=pooling,
+            pretrained_embeddings=embedding_matrix,
+            freeze_embeddings=False,
+        )
+    else:
+        raise ValueError(
+            f"model_version doit être 'v1' ou 'v2', reçu : {model_version}"
+        )
+        
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     if verbose:
         print(f"  → Paramètres entraînables : {n_params:,}")
@@ -205,17 +228,20 @@ def run_lstm_experiment(
             "val": len(val_data),
             "test": len(test_data),
         },
-        "model": {
-            "type": "bilstm",
+       "model": {
+            "type": f"bilstm_{model_version}",
             "feature_type": "word_sequences",
             "vocab_size": len(vocab),
             "max_vocab_size": max_vocab_size,
             "max_seq_len": max_seq_len,
             "embedding_dim": embedding_dim,
             "hidden_dim": hidden_dim,
+            "num_layers": num_layers,
             "bidirectional": True,
+            "pooling": pooling if model_version == "v2" else "last",
             "dropout_rate": dropout_rate,
-            "pretrained_embeddings": "GloVe 6B.100d",
+            "lstm_dropout": lstm_dropout if (model_version == "v2" and num_layers > 1) else 0.0,
+            "pretrained_embeddings": f"GloVe 6B.{embedding_dim}d",
             "freeze_embeddings": False,
             "n_trainable_params": n_params,
         },
