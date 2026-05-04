@@ -1263,5 +1263,548 @@
       "stopped_early": true
     },
     "saved_as_production": true
+  },
+  {
+    "name": "bilstm_glove_vocab_15k",
+    "timestamp": "2026-05-04T22:26:29.636684+00:00",
+    "dataset": "imdb",
+    "splits": {
+      "train": 22000,
+      "val": 3000,
+      "test": 25000
+    },
+    "model": {
+      "type": "bilstm",
+      "feature_type": "word_sequences",
+      "vocab_size": 15000,
+      "max_vocab_size": 15000,
+      "max_seq_len": 512,
+      "embedding_dim": 100,
+      "hidden_dim": 64,
+      "bidirectional": true,
+      "dropout_rate": 0.3,
+      "pretrained_embeddings": "GloVe 6B.100d",
+      "freeze_embeddings": false,
+      "n_trainable_params": 1585250
+    },
+    "preprocessing": {
+      "lowercase": true,
+      "remove_punctuation": true,
+      "min_count": 5
+    },
+    "training": {
+      "batch_size": 64,
+      "max_epochs": 15,
+      "epochs_run": 10,
+      "learning_rate": 0.001,
+      "optimizer": "Adam",
+      "loss": "CrossEntropyLoss",
+      "weight_decay": 0.0,
+      "device": "cuda",
+      "early_stopping": {
+        "enabled": true,
+        "patience": 3,
+        "min_delta": 0.0001,
+        "stopped_early": true,
+        "best_epoch": 7
+      }
+    },
+    "val_metrics": {
+      "accuracy": 0.8937,
+      "precision": 0.8955,
+      "recall": 0.8913,
+      "f1": 0.8934
+    },
+    "loss_history": {
+      "train_loss": [
+        0.6238,
+        0.4467,
+        0.3137,
+        0.2425,
+        0.1994,
+        0.16,
+        0.1296,
+        0.1157,
+        0.0909,
+        0.0781
+      ],
+      "val_loss": [
+        0.5048,
+        0.4213,
+        0.3104,
+        0.3293,
+        0.303,
+        0.3425,
+        0.301,
+        0.3081,
+        0.3406,
+        0.3468
+      ],
+      "best_epoch": 7,
+      "stopped_early": true
+    },
+    "saved_as_production": false
+  },
+  {
+    "name": "bilstm_glove_vocab_30k",
+    "timestamp": "2026-05-04T22:27:16.859726+00:00",
+    "dataset": "imdb",
+    "splits": {
+      "train": 22000,
+      "val": 3000,
+      "test": 25000
+    },
+    "model": {
+      "type": "bilstm",
+      "feature_type": "word_sequences",
+      "vocab_size": 27428,
+      "max_vocab_size": 30000,
+      "max_seq_len": 512,
+      "embedding_dim": 100,
+      "hidden_dim": 64,
+      "bidirectional": true,
+      "dropout_rate": 0.3,
+      "pretrained_embeddings": "GloVe 6B.100d",
+      "freeze_embeddings": false,
+      "n_trainable_params": 2828050
+    },
+    "preprocessing": {
+      "lowercase": true,
+      "remove_punctuation": true,
+      "min_count": 5
+    },
+    "training": {
+      "batch_size": 64,
+      "max_epochs": 15,
+      "epochs_run": 8,
+      "learning_rate": 0.001,
+      "optimizer": "Adam",
+      "loss": "CrossEntropyLoss",
+      "weight_decay": 0.0,
+      "device": "cuda",
+      "early_stopping": {
+        "enabled": true,
+        "patience": 3,
+        "min_delta": 0.0001,
+        "stopped_early": true,
+        "best_epoch": 5
+      }
+    },
+    "val_metrics": {
+      "accuracy": 0.8907,
+      "precision": 0.8886,
+      "recall": 0.8933,
+      "f1": 0.891
+    },
+    "loss_history": {
+      "train_loss": [
+        0.6721,
+        0.5122,
+        0.3137,
+        0.2761,
+        0.1911,
+        0.137,
+        0.1051,
+        0.0814
+      ],
+      "val_loss": [
+        0.6079,
+        0.3928,
+        0.4243,
+        0.3122,
+        0.2903,
+        0.3116,
+        0.3162,
+        0.3522
+      ],
+      "best_epoch": 5,
+      "stopped_early": true
+    },
+    "saved_as_production": false
+  },
+  {
+    "name": "bilstm_glove_vocab_60k",
+    "timestamp": "2026-05-04T22:28:05.574789+00:00",
+    "dataset": "imdb",
+    "splits": {
+      "train": 22000,
+      "val": 3000,
+      "test": 25000
+    },
+    "model": {
+      "type": "bilstm",
+      "feature_type": "word_sequences",
+      "vocab_size": 27428,
+      "max_vocab_size": 60000,
+      "max_seq_len": 512,
+      "embedding_dim": 100,
+      "hidden_dim": 64,
+      "bidirectional": true,
+      "dropout_rate": 0.3,
+      "pretrained_embeddings": "GloVe 6B.100d",
+      "freeze_embeddings": false,
+      "n_trainable_params": 2828050
+    },
+    "preprocessing": {
+      "lowercase": true,
+      "remove_punctuation": true,
+      "min_count": 5
+    },
+    "training": {
+      "batch_size": 64,
+      "max_epochs": 15,
+      "epochs_run": 8,
+      "learning_rate": 0.001,
+      "optimizer": "Adam",
+      "loss": "CrossEntropyLoss",
+      "weight_decay": 0.0,
+      "device": "cuda",
+      "early_stopping": {
+        "enabled": true,
+        "patience": 3,
+        "min_delta": 0.0001,
+        "stopped_early": true,
+        "best_epoch": 5
+      }
+    },
+    "val_metrics": {
+      "accuracy": 0.8907,
+      "precision": 0.8886,
+      "recall": 0.8933,
+      "f1": 0.891
+    },
+    "loss_history": {
+      "train_loss": [
+        0.6721,
+        0.5122,
+        0.3137,
+        0.2761,
+        0.1911,
+        0.137,
+        0.1051,
+        0.0814
+      ],
+      "val_loss": [
+        0.6079,
+        0.3928,
+        0.4243,
+        0.3122,
+        0.2903,
+        0.3116,
+        0.3162,
+        0.3522
+      ],
+      "best_epoch": 5,
+      "stopped_early": true
+    },
+    "saved_as_production": false
+  },
+  {
+    "name": "bilstm_v2_hidden256",
+    "timestamp": "2026-05-04T22:49:22.630305+00:00",
+    "dataset": "imdb",
+    "splits": {
+      "train": 22000,
+      "val": 3000,
+      "test": 25000
+    },
+    "model": {
+      "type": "bilstm_v2",
+      "feature_type": "word_sequences",
+      "vocab_size": 27428,
+      "max_vocab_size": 30000,
+      "max_seq_len": 512,
+      "embedding_dim": 100,
+      "hidden_dim": 256,
+      "num_layers": 1,
+      "bidirectional": true,
+      "pooling": "last",
+      "dropout_rate": 0.3,
+      "lstm_dropout": 0.0,
+      "pretrained_embeddings": "GloVe 6B.100d",
+      "freeze_embeddings": false,
+      "n_trainable_params": 3477010
+    },
+    "preprocessing": {
+      "lowercase": true,
+      "remove_punctuation": true,
+      "min_count": 5
+    },
+    "training": {
+      "batch_size": 64,
+      "max_epochs": 15,
+      "epochs_run": 6,
+      "learning_rate": 0.001,
+      "optimizer": "Adam",
+      "loss": "CrossEntropyLoss",
+      "weight_decay": 0.0,
+      "device": "cuda",
+      "early_stopping": {
+        "enabled": true,
+        "patience": 3,
+        "min_delta": 0.0001,
+        "stopped_early": true,
+        "best_epoch": 3
+      }
+    },
+    "val_metrics": {
+      "accuracy": 0.8923,
+      "precision": 0.8874,
+      "recall": 0.8987,
+      "f1": 0.893
+    },
+    "loss_history": {
+      "train_loss": [
+        0.6776,
+        0.3745,
+        0.2552,
+        0.198,
+        0.1419,
+        0.1104
+      ],
+      "val_loss": [
+        0.563,
+        0.3034,
+        0.2784,
+        0.2912,
+        0.3062,
+        0.3552
+      ],
+      "best_epoch": 3,
+      "stopped_early": true
+    },
+    "saved_as_production": false
+  },
+  {
+    "name": "bilstm_v2_hidden256_2layers",
+    "timestamp": "2026-05-04T23:02:39.825802+00:00",
+    "dataset": "imdb",
+    "splits": {
+      "train": 22000,
+      "val": 3000,
+      "test": 25000
+    },
+    "model": {
+      "type": "bilstm_v2",
+      "feature_type": "word_sequences",
+      "vocab_size": 27428,
+      "max_vocab_size": 30000,
+      "max_seq_len": 512,
+      "embedding_dim": 100,
+      "hidden_dim": 256,
+      "num_layers": 2,
+      "bidirectional": true,
+      "pooling": "last",
+      "dropout_rate": 0.3,
+      "lstm_dropout": 0.3,
+      "pretrained_embeddings": "GloVe 6B.100d",
+      "freeze_embeddings": false,
+      "n_trainable_params": 5053970
+    },
+    "preprocessing": {
+      "lowercase": true,
+      "remove_punctuation": true,
+      "min_count": 5
+    },
+    "training": {
+      "batch_size": 64,
+      "max_epochs": 15,
+      "epochs_run": 10,
+      "learning_rate": 0.001,
+      "optimizer": "Adam",
+      "loss": "CrossEntropyLoss",
+      "weight_decay": 0.0,
+      "device": "cuda",
+      "early_stopping": {
+        "enabled": true,
+        "patience": 3,
+        "min_delta": 0.0001,
+        "stopped_early": true,
+        "best_epoch": 7
+      }
+    },
+    "val_metrics": {
+      "accuracy": 0.891,
+      "precision": 0.8928,
+      "recall": 0.8887,
+      "f1": 0.8907
+    },
+    "loss_history": {
+      "train_loss": [
+        0.6379,
+        0.5998,
+        0.5526,
+        0.315,
+        0.1986,
+        0.1425,
+        0.1074,
+        0.0799,
+        0.0623,
+        0.0483
+      ],
+      "val_loss": [
+        0.5236,
+        1.0593,
+        0.3341,
+        0.2906,
+        0.2942,
+        0.3367,
+        0.2857,
+        0.325,
+        0.351,
+        0.4747
+      ],
+      "best_epoch": 7,
+      "stopped_early": true
+    },
+    "saved_as_production": false
+  },
+  {
+    "name": "bilstm_v2_hidden256_2layers_meanpool",
+    "timestamp": "2026-05-04T23:09:27.195989+00:00",
+    "dataset": "imdb",
+    "splits": {
+      "train": 22000,
+      "val": 3000,
+      "test": 25000
+    },
+    "model": {
+      "type": "bilstm_v2",
+      "feature_type": "word_sequences",
+      "vocab_size": 27428,
+      "max_vocab_size": 30000,
+      "max_seq_len": 512,
+      "embedding_dim": 100,
+      "hidden_dim": 256,
+      "num_layers": 2,
+      "bidirectional": true,
+      "pooling": "mean",
+      "dropout_rate": 0.3,
+      "lstm_dropout": 0.3,
+      "pretrained_embeddings": "GloVe 6B.100d",
+      "freeze_embeddings": false,
+      "n_trainable_params": 5053970
+    },
+    "preprocessing": {
+      "lowercase": true,
+      "remove_punctuation": true,
+      "min_count": 5
+    },
+    "training": {
+      "batch_size": 64,
+      "max_epochs": 15,
+      "epochs_run": 5,
+      "learning_rate": 0.001,
+      "optimizer": "Adam",
+      "loss": "CrossEntropyLoss",
+      "weight_decay": 0.0,
+      "device": "cuda",
+      "early_stopping": {
+        "enabled": true,
+        "patience": 3,
+        "min_delta": 0.0001,
+        "stopped_early": true,
+        "best_epoch": 2
+      }
+    },
+    "val_metrics": {
+      "accuracy": 0.9027,
+      "precision": 0.9037,
+      "recall": 0.9013,
+      "f1": 0.9025
+    },
+    "loss_history": {
+      "train_loss": [
+        0.4309,
+        0.2545,
+        0.1844,
+        0.1316,
+        0.0902
+      ],
+      "val_loss": [
+        0.3178,
+        0.2454,
+        0.2553,
+        0.2605,
+        0.3125
+      ],
+      "best_epoch": 2,
+      "stopped_early": true
+    },
+    "saved_as_production": false
+  },
+  {
+    "name": "bilstm_v2_full_glove300",
+    "timestamp": "2026-05-04T23:17:49.852418+00:00",
+    "dataset": "imdb",
+    "splits": {
+      "train": 22000,
+      "val": 3000,
+      "test": 25000
+    },
+    "model": {
+      "type": "bilstm_v2",
+      "feature_type": "word_sequences",
+      "vocab_size": 27428,
+      "max_vocab_size": 30000,
+      "max_seq_len": 512,
+      "embedding_dim": 300,
+      "hidden_dim": 256,
+      "num_layers": 2,
+      "bidirectional": true,
+      "pooling": "mean",
+      "dropout_rate": 0.3,
+      "lstm_dropout": 0.3,
+      "pretrained_embeddings": "GloVe 6B.300d",
+      "freeze_embeddings": false,
+      "n_trainable_params": 10949170
+    },
+    "preprocessing": {
+      "lowercase": true,
+      "remove_punctuation": true,
+      "min_count": 5
+    },
+    "training": {
+      "batch_size": 64,
+      "max_epochs": 15,
+      "epochs_run": 5,
+      "learning_rate": 0.001,
+      "optimizer": "Adam",
+      "loss": "CrossEntropyLoss",
+      "weight_decay": 0.0,
+      "device": "cuda",
+      "early_stopping": {
+        "enabled": true,
+        "patience": 3,
+        "min_delta": 0.0001,
+        "stopped_early": true,
+        "best_epoch": 2
+      }
+    },
+    "val_metrics": {
+      "accuracy": 0.9137,
+      "precision": 0.9101,
+      "recall": 0.918,
+      "f1": 0.914
+    },
+    "loss_history": {
+      "train_loss": [
+        0.3779,
+        0.2004,
+        0.1192,
+        0.0616,
+        0.029
+      ],
+      "val_loss": [
+        0.2517,
+        0.2316,
+        0.279,
+        0.4067,
+        0.479
+      ],
+      "best_epoch": 2,
+      "stopped_early": true
+    },
+    "saved_as_production": false
   }
 ]
