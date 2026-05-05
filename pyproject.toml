@@ -3,7 +3,7 @@ name = "nlp-sentiment-classification"
 version = "0.1.0"
 description = "Classification de sentiments de critiques de films — comparaison de modèles n-grammes (régression logistique) et LSTM en PyTorch"
 readme = "README.md"
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.11,<3.15"
 license = { text = "MIT" }
 authors = [
     { name = "Sandra Desmair Fogang Lontouo" }
