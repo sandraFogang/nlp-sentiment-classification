@@ -36,11 +36,16 @@ def predict_on_dataloader(
     results = []
     with torch.no_grad():
         for batch_inputs, batch_labels, batch_ids in dataloader:
-            # On déplace inputs et labels sur DEVICE pour cohérence
-            batch_inputs = batch_inputs.to(device)
+            if isinstance(batch_inputs, dict):
+                batch_inputs = {k: v.to(device) for k, v in batch_inputs.items()}
+            else:
+                batch_inputs = batch_inputs.to(device)
             batch_labels = batch_labels.to(device)
 
-            logits = model(batch_inputs)
+            if isinstance(batch_inputs, dict):
+                logits = model(**batch_inputs)
+            else:
+                logits = model(batch_inputs)
 
             # .cpu() avant .tolist() : les listes Python vivent sur CPU
             true_labels = batch_labels.argmax(dim=1).cpu().tolist()
@@ -130,10 +135,16 @@ def compute_loss(
 
     with torch.no_grad():
         for batch_inputs, batch_labels, _ in dataloader:
-            batch_inputs = batch_inputs.to(device)
+            if isinstance(batch_inputs, dict):
+                batch_inputs = {k: v.to(device) for k, v in batch_inputs.items()}
+            else:
+                batch_inputs = batch_inputs.to(device)
             batch_labels = batch_labels.to(device).argmax(dim=1)
 
-            logits = model(batch_inputs)
+            if isinstance(batch_inputs, dict):
+                logits = model(**batch_inputs)
+            else:
+                logits = model(batch_inputs)
             loss = criterion(logits, batch_labels)
 
             total_loss += loss.item()

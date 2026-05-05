@@ -92,11 +92,22 @@ def train(
         epoch_loss = 0.0
 
         for batch_inputs, batch_labels, _ in train_loop:
-            batch_inputs = batch_inputs.to(device)
+            # Support des deux types d'input :
+            # - Tenseur (n-grammes, TF-IDF, LSTM)
+            # - Dict avec input_ids + attention_mask (BERT)
+            if isinstance(batch_inputs, dict):
+                batch_inputs = {k: v.to(device) for k, v in batch_inputs.items()}
+            else:
+                batch_inputs = batch_inputs.to(device)
+
             batch_labels = batch_labels.to(device).argmax(dim=1)
 
             optimizer.zero_grad()
-            logits = model(batch_inputs)
+            # Pour BERT : on déballe le dict en kwargs
+            if isinstance(batch_inputs, dict):
+                logits = model(**batch_inputs)
+            else:
+                logits = model(batch_inputs)
             loss = criterion(logits, batch_labels)
             loss.backward()
             optimizer.step()
