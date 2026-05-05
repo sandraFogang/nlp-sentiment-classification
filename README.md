@@ -1,3 +1,5 @@
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://TON-URL.streamlit.app)
+
 # nlp-sentiment-classification
 
 > Classification de sentiments de critiques de films — comparaison de modèles n-grammes (régression logistique) et LSTM en PyTorch.

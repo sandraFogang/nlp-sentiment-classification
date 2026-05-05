@@ -9,7 +9,7 @@ Architecture :
 
 Modes :
 - freeze_bert=True  : seul le classifier final est entraîné
-- freeze_bert=False : tout DistilBERT + le classifier sont fine-tunés (recommandé)
+- freeze_bert=False : tout DistilBERT + le classifier sont fine-tunés 
 """
 import torch
 import torch.nn as nn
