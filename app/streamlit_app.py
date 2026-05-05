@@ -18,24 +18,21 @@ st.set_page_config(
 
 
 # ============================================================================
-# Custom CSS for a sober, professional look
+# Custom CSS
 # ============================================================================
 st.markdown(
     """
     <style>
-    /* Reduce default top padding */
     .block-container {
         padding-top: 2rem;
         padding-bottom: 2rem;
         max-width: 1100px;
     }
-
-    /* Hero header */
     .hero-header {
         background: linear-gradient(135deg, #f7f7f5 0%, #ececea 100%);
         border-radius: 12px;
         padding: 1.5rem 1.75rem;
-        margin-bottom: 1.5rem;
+        margin-bottom: 1.25rem;
         border: 1px solid #e3e3df;
     }
     .hero-header h1 {
@@ -57,49 +54,71 @@ st.markdown(
         font-size: 0.85rem;
         color: #6a6a65;
     }
-    .hero-stats span strong {
-        color: #1a1a1a;
-    }
+    .hero-stats span strong { color: #1a1a1a; }
 
-    /* Sidebar headers */
-    section[data-testid="stSidebar"] h3 {
-        font-size: 0.85rem;
+    /* Sidebar prompt — points to examples */
+    .sidebar-prompt {
+        background: #fff8e6;
+        border: 1px solid #ffe0a3;
+        border-radius: 8px;
+        padding: 0.6rem 0.9rem;
+        margin-bottom: 1rem;
+        font-size: 0.88rem;
+        color: #7a5800;
+    }
+    .sidebar-prompt strong { color: #5a4200; }
+
+    /* Sidebar styling */
+    section[data-testid="stSidebar"] {
+        background: #fafaf8;
+    }
+    .example-category {
+        font-size: 0.72rem;
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        color: #6a6a65;
-        font-weight: 600;
-        margin-top: 1.2rem;
-        margin-bottom: 0.5rem;
-    }
-
-    /* Sidebar example category labels */
-    .example-category {
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
         color: #8a8a85;
-        font-weight: 600;
+        font-weight: 700;
         margin: 0.85rem 0 0.4rem;
         padding-bottom: 0.25rem;
         border-bottom: 1px solid #e8e8e4;
     }
 
-    /* Make sidebar buttons feel less heavy */
-    section[data-testid="stSidebar"] button[kind="secondary"] {
-        background: transparent;
+    /* Author signature card in main area */
+    .author-card {
+        background: #fafaf8;
         border: 1px solid #e3e3df;
-        text-align: left;
-        font-size: 0.85rem;
-        padding: 0.45rem 0.7rem;
+        border-radius: 10px;
+        padding: 1rem 1.25rem;
+        margin-top: 2rem;
+        text-align: center;
     }
-    section[data-testid="stSidebar"] button[kind="secondary"]:hover {
-        background: #f5f5f2;
-        border-color: #c5c5bf;
+    .author-card p {
+        margin: 0;
+        color: #4a4a45;
     }
-
-    /* Result cards */
-    .result-section {
-        margin-top: 1rem;
+    .author-card .author-name {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #1a1a1a;
+    }
+    .author-card .author-links {
+        margin-top: 0.5rem;
+        font-size: 0.9rem;
+    }
+    .author-card a {
+        color: #4a4a45;
+        text-decoration: none;
+        margin: 0 0.5rem;
+        padding: 0.3rem 0.75rem;
+        background: white;
+        border: 1px solid #d8d8d4;
+        border-radius: 6px;
+        display: inline-block;
+        transition: all 0.15s ease;
+    }
+    .author-card a:hover {
+        background: #f0f0ec;
+        border-color: #b8b8b2;
     }
     </style>
     """,
@@ -108,7 +127,7 @@ st.markdown(
 
 
 # ============================================================================
-# Model loading (with intelligent fallback)
+# Model loading
 # ============================================================================
 @st.cache_resource(show_spinner="Loading model...")
 def _ensure_model_available() -> None:
@@ -128,7 +147,7 @@ def get_predict_fn():
 
 
 # ============================================================================
-# Examples from IMDB test set (never seen during training)
+# Examples
 # ============================================================================
 EXAMPLES = {
     "clear_positive": {
@@ -223,7 +242,7 @@ CATEGORIES = ["Clear cases", "Nuanced cases", "Hard cases (model limits)"]
 
 
 # ============================================================================
-# Session state initialization
+# Session state
 # ============================================================================
 if "review_text" not in st.session_state:
     st.session_state["review_text"] = ""
@@ -232,11 +251,14 @@ if "current_example_key" not in st.session_state:
 
 
 # ============================================================================
-# Sidebar — Examples and documentation
+# Sidebar
 # ============================================================================
 with st.sidebar:
-    st.markdown("### Try an example")
-    st.caption("All examples come from the IMDB test set. The model never saw them during training.")
+    st.markdown("## Try an example")
+    st.caption(
+        "Click any example below to load it into the analyzer. "
+        "All examples come from the IMDB test set — the model never saw them during training."
+    )
 
     for category in CATEGORIES:
         st.markdown(f"<div class='example-category'>{category}</div>", unsafe_allow_html=True)
@@ -247,7 +269,7 @@ with st.sidebar:
                 st.session_state["current_example_key"] = key
 
     st.markdown("---")
-    st.markdown("### Documentation")
+    st.markdown("## Documentation")
 
     with st.expander("About the model"):
         st.markdown(
@@ -270,18 +292,14 @@ with st.sidebar:
             "**Training data.** 22,000 reviews from the public IMDB corpus "
             "(Maas et al., 2011), balanced between positive and negative classes.\n\n"
             "**Measured performance.** Accuracy 92.0%, macro F1 91.9% on a validation "
-            "set of 3,000 reviews. Test set performance (25,000 reviews) to be measured "
-            "once the final model is selected.\n\n"
+            "set of 3,000 reviews.\n\n"
             "**Known limitations.**\n"
             "- Trained on English only. Output is unreliable on other languages.\n"
-            "- Degraded performance on out-of-domain texts (products, services, etc.).\n"
-            "- Sensitive to sarcasm and irony: a text with lexically positive markers "
-            "may be classified as positive even if the intent is ironic.\n"
-            "- Does not differentiate very short texts (< 20 words) from long ones; "
-            "short texts are typically less reliable.\n\n"
+            "- Degraded performance on out-of-domain texts.\n"
+            "- Sensitive to sarcasm and irony.\n"
+            "- Less reliable on very short texts (< 20 words).\n\n"
             "**Ethical considerations.** This model should not be used for automated "
-            "decisions affecting individuals (content moderation, customer feedback "
-            "scoring in production) without human validation and additional auditing."
+            "decisions affecting individuals without human validation."
         )
 
     with st.expander("Technical details"):
@@ -293,25 +311,12 @@ with st.sidebar:
             "**Classifier.** PyTorch logistic regression, Adam optimizer, lr=1e-3, "
             "early stopping (patience 3, min_delta 1e-4), macro F1 as selection criterion.\n\n"
             "**Reproducibility.** All experiments are versioned in "
-            "`outputs/experiments.json` of the GitHub repository. Intermediate champions "
-            "(bigram baseline, TF-IDF, BiLSTM+GloVe) are archived locally."
+            "`outputs/experiments.json` of the GitHub repository."
         )
-
-    st.markdown("---")
-    st.markdown(
-        "<p style='font-size: 0.8rem; color: #6a6a65; margin-top: 1rem;'>"
-        "<strong>Sandra Desmair Fogang Lontouo</strong><br>"
-        "<a href='https://github.com/sandraFogang/nlp-sentiment-classification' "
-        "target='_blank' style='color: #4a4a45;'>GitHub</a> · "
-        "<a href='https://www.linkedin.com/in/sandrafogang' "
-        "target='_blank' style='color: #4a4a45;'>LinkedIn</a>"
-        "</p>",
-        unsafe_allow_html=True,
-    )
 
 
 # ============================================================================
-# Main area — Hero header + input + results
+# Main area
 # ============================================================================
 st.markdown(
     """
@@ -328,7 +333,17 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Limitations notice (compact)
+# Pointer to the sidebar — visible cue for new visitors
+st.markdown(
+    """
+    <div class='sidebar-prompt'>
+        <strong>👈 Pre-loaded examples available in the sidebar.</strong>
+        Click any example to load it into the analyzer below, or paste your own English review.
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
 st.info(
     "**Note.** This model was trained exclusively on **English** movie reviews. "
     "It may underperform on other languages, out-of-domain texts (products, services), "
@@ -336,7 +351,6 @@ st.info(
     icon="ℹ️",
 )
 
-# === Input area ===
 review = st.text_area(
     label="Review to analyze",
     value=st.session_state["review_text"],
@@ -347,16 +361,11 @@ review = st.text_area(
     label_visibility="visible",
 )
 
-# Detect manual edit (drop association with the loaded example)
 if review != st.session_state["review_text"]:
     st.session_state["current_example_key"] = None
     st.session_state["review_text"] = review
 
-analyze = st.button(
-    "Analyze sentiment",
-    type="primary",
-    use_container_width=True,
-)
+analyze = st.button("Analyze sentiment", type="primary", use_container_width=True)
 
 
 # === Results ===
@@ -368,7 +377,6 @@ if analyze:
         with st.spinner("Analyzing..."):
             result = predict_fn(review)
 
-        st.markdown("<div class='result-section'></div>", unsafe_allow_html=True)
         st.markdown("### Result")
 
         label = result["label"]
@@ -388,7 +396,6 @@ if analyze:
         st.progress(proba_neg, text=f"Negative — {proba_neg:.1%}")
         st.progress(proba_pos, text=f"Positive — {proba_pos:.1%}")
 
-        # Explanatory note for tricky examples
         example_key = st.session_state.get("current_example_key")
         if example_key and EXAMPLES[example_key]["is_tricky"]:
             st.warning(
@@ -397,3 +404,21 @@ if analyze:
             )
         elif example_key:
             st.caption(EXAMPLES[example_key]["expected"])
+
+
+# === Author footer in main area ===
+st.markdown(
+    """
+    <div class='author-card'>
+        <p class='author-name'>Sandra Desmair Fogang Lontouo</p>
+        <p style='font-size: 0.85rem; color: #6a6a65; margin-top: 0.25rem;'>
+            Data Scientist · NLP · Machine Learning
+        </p>
+        <div class='author-links'>
+            <a href='https://github.com/sandraFogang/nlp-sentiment-classification' target='_blank'>GitHub</a>
+            <a href='https://www.linkedin.com/in/sandrafogang' target='_blank'>LinkedIn</a>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
