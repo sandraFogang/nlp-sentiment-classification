@@ -1,0 +1,74 @@
+name: Wake up Streamlit app
+
+on:
+  schedule:
+    # Runs every 6 hours (00:00, 06:00, 12:00, 18:00 UTC)
+    - cron: '0 */6 * * *'
+  workflow_dispatch:  # allows manual trigger from GitHub UI
+
+jobs:
+  wake-up:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Selenium
+        run: pip install selenium
+
+      - name: Install Chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+
+      - name: Wake up the app
+        env:
+          STREAMLIT_URL: ${{ secrets.STREAMLIT_URL }}
+        run: |
+          python <<'EOF'
+          import os
+          import time
+          from selenium import webdriver
+          from selenium.webdriver.chrome.options import Options
+          from selenium.webdriver.common.by import By
+          from selenium.webdriver.support.ui import WebDriverWait
+          from selenium.webdriver.support import expected_conditions as EC
+          from selenium.common.exceptions import TimeoutException
+
+          url = os.environ["STREAMLIT_URL"]
+          print(f"Visiting {url}...")
+
+          options = Options()
+          options.add_argument("--headless=new")
+          options.add_argument("--no-sandbox")
+          options.add_argument("--disable-dev-shm-usage")
+
+          driver = webdriver.Chrome(options=options)
+          driver.set_page_load_timeout(60)
+
+          try:
+              driver.get(url)
+              wait = WebDriverWait(driver, 30)
+
+              # Try to find the "wake up" button (only present if the app is asleep)
+              try:
+                  wake_btn = wait.until(
+                      EC.element_to_be_clickable(
+                          (By.XPATH, "//button[contains(text(), 'get this app back up')]")
+                      )
+                  )
+                  print("App was asleep — clicking wake-up button...")
+                  wake_btn.click()
+                  time.sleep(15)
+                  print("App is waking up.")
+              except TimeoutException:
+                  print("No wake-up button found — app is already awake.")
+          finally:
+              driver.quit()
+              print("Done.")
+          EOF

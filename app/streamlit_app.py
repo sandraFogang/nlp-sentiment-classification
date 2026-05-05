@@ -1,4 +1,4 @@
-"""Application web d'analyse de sentiment sur des critiques de films."""
+"""Sentiment analysis web app — IMDB movie reviews."""
 import sys
 from pathlib import Path
 
@@ -10,22 +10,112 @@ sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 
 
 st.set_page_config(
-    page_title="Analyse de sentiment — Critiques de films",
+    page_title="Sentiment Analysis — Movie Reviews",
     page_icon="🎬",
-    layout="centered",
-    initial_sidebar_state="collapsed",
+    layout="wide",
+    initial_sidebar_state="expanded",
 )
 
 
 # ============================================================================
-# Modèle (chargement avec fallback intelligent)
+# Custom CSS for a sober, professional look
 # ============================================================================
-@st.cache_resource(show_spinner="Chargement du modèle...")
+st.markdown(
+    """
+    <style>
+    /* Reduce default top padding */
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+        max-width: 1100px;
+    }
+
+    /* Hero header */
+    .hero-header {
+        background: linear-gradient(135deg, #f7f7f5 0%, #ececea 100%);
+        border-radius: 12px;
+        padding: 1.5rem 1.75rem;
+        margin-bottom: 1.5rem;
+        border: 1px solid #e3e3df;
+    }
+    .hero-header h1 {
+        margin: 0;
+        font-size: 1.75rem;
+        font-weight: 600;
+        color: #1a1a1a;
+        letter-spacing: -0.01em;
+    }
+    .hero-header p {
+        margin: 0.5rem 0 0;
+        color: #5a5a55;
+        font-size: 0.95rem;
+    }
+    .hero-stats {
+        display: flex;
+        gap: 1.5rem;
+        margin-top: 0.75rem;
+        font-size: 0.85rem;
+        color: #6a6a65;
+    }
+    .hero-stats span strong {
+        color: #1a1a1a;
+    }
+
+    /* Sidebar headers */
+    section[data-testid="stSidebar"] h3 {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #6a6a65;
+        font-weight: 600;
+        margin-top: 1.2rem;
+        margin-bottom: 0.5rem;
+    }
+
+    /* Sidebar example category labels */
+    .example-category {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #8a8a85;
+        font-weight: 600;
+        margin: 0.85rem 0 0.4rem;
+        padding-bottom: 0.25rem;
+        border-bottom: 1px solid #e8e8e4;
+    }
+
+    /* Make sidebar buttons feel less heavy */
+    section[data-testid="stSidebar"] button[kind="secondary"] {
+        background: transparent;
+        border: 1px solid #e3e3df;
+        text-align: left;
+        font-size: 0.85rem;
+        padding: 0.45rem 0.7rem;
+    }
+    section[data-testid="stSidebar"] button[kind="secondary"]:hover {
+        background: #f5f5f2;
+        border-color: #c5c5bf;
+    }
+
+    /* Result cards */
+    .result-section {
+        margin-top: 1rem;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# ============================================================================
+# Model loading (with intelligent fallback)
+# ============================================================================
+@st.cache_resource(show_spinner="Loading model...")
 def _ensure_model_available() -> None:
     from nlp_sentiment.config import MODEL_PATH, VOCAB_PATH
 
     if not (MODEL_PATH.exists() and VOCAB_PATH.exists()):
-        st.info("Premier démarrage : entraînement du modèle (environ 3 minutes).")
+        st.info("First-time setup: training the model (about 3 minutes).")
         from train_champion_tfidf import main as train_champion
         train_champion()
 
@@ -38,12 +128,12 @@ def get_predict_fn():
 
 
 # ============================================================================
-# Exemples du test set IMDB (jamais vus pendant l'entraînement)
+# Examples from IMDB test set (never seen during training)
 # ============================================================================
 EXAMPLES = {
     "clear_positive": {
-        "label": "Critique positive — cas clair",
-        "category": "Cas clairs (haute confiance attendue)",
+        "label": "Positive review (clear case)",
+        "category": "Clear cases",
         "text": (
             "Previous reviewer Claudio Carvalho gave a much better recap of the film's "
             "plot details than I could. What I recall mostly is that it was just so "
@@ -52,12 +142,12 @@ EXAMPLES = {
             "content to which that beauty is relevant, I think you will be glad to have "
             "seen this extraordinary and unusual work of art."
         ),
-        "expected": "Sentiment réel : positif. Le modèle devrait être très confiant.",
+        "expected": "Actual sentiment: positive. The model should be highly confident.",
         "is_tricky": False,
     },
     "clear_negative": {
-        "label": "Critique négative — cas clair",
-        "category": "Cas clairs (haute confiance attendue)",
+        "label": "Negative review (clear case)",
+        "category": "Clear cases",
         "text": (
             "Technically I'am a Van Damme Fan, or I was. This movie is so bad that I hated "
             "myself for wasting those 90 minutes. Do not let the name Isaac Florentine "
@@ -66,12 +156,12 @@ EXAMPLES = {
             "Van Damme movie. The story is weak, the fights are mediocre and the directing "
             "is below average. A complete disappointment."
         ),
-        "expected": "Sentiment réel : négatif. Le modèle devrait être très confiant.",
+        "expected": "Actual sentiment: negative. The model should be highly confident.",
         "is_tricky": False,
     },
     "moderate_negative": {
-        "label": "Critique courte ambiguë",
-        "category": "Cas nuancés (le modèle hésite légitimement)",
+        "label": "Short ambiguous review",
+        "category": "Nuanced cases",
         "text": (
             "An obscure horror show filmed in the Everglades. Two couples stay overnight "
             "in a cabin after being made a little uneasy by the unfriendliness of the "
@@ -79,12 +169,12 @@ EXAMPLES = {
             "Watch for the character of the village idiot who clucks like a chicken, "
             "he certainly steals the show."
         ),
-        "expected": "Sentiment réel : négatif (note basse). Le modèle hésite — confiance modérée.",
+        "expected": "Actual sentiment: negative (low rating). The model hesitates with moderate confidence.",
         "is_tricky": False,
     },
     "subtle_positive": {
-        "label": "Éloge nuancé d'un film d'auteur",
-        "category": "Cas nuancés (le modèle hésite légitimement)",
+        "label": "Nuanced praise",
+        "category": "Nuanced cases",
         "text": (
             "I admire Deepa Mehta and this movie is a masterpiece. I'd recommend to buy "
             "this movie on DVD because it's a movie you might want to watch more often "
@@ -92,28 +182,28 @@ EXAMPLES = {
             "after watching it several times. The characters - except for the grandmother "
             "and the maid - are not perfect."
         ),
-        "expected": "Sentiment réel : positif. Texte plus subtil qu'une simple éloge directe.",
+        "expected": "Actual sentiment: positive. More subtle than direct praise.",
         "is_tricky": False,
     },
     "sarcasm": {
-        "label": "Critique sarcastique",
-        "category": "Cas difficiles (limites du modèle classique)",
+        "label": "Sarcastic review",
+        "category": "Hard cases (model limits)",
         "text": (
             "There must be an error. This movie belongs with \"Plan 9\", and a lot others "
             "as a quite entertaining, silly diversion. You'll never accept you like it, "
             "yet you will watch it whenever it comes out on TV. It's as simple as that."
         ),
         "expected": (
-            "Sentiment réel : **négatif**. La critique compare le film à Plan 9 from Outer Space "
-            "(considéré comme l'un des pires films jamais réalisés). Le modèle interprète "
-            "à tort les mots positifs (\"entertaining\", \"like it\") sans saisir l'ironie. "
-            "C'est une limite connue des approches sac-de-mots."
+            "Actual sentiment: **negative**. The reviewer compares the film to *Plan 9 from Outer Space* "
+            "(considered one of the worst movies ever made). The model misreads positive words "
+            "(\"entertaining\", \"like it\") without grasping the irony. This is a known limitation "
+            "of bag-of-words approaches."
         ),
         "is_tricky": True,
     },
     "ambivalent": {
-        "label": "Critique ambivalente (\"guilty pleasure\")",
-        "category": "Cas difficiles (limites du modèle classique)",
+        "label": "Ambivalent review (\"guilty pleasure\")",
+        "category": "Hard cases (model limits)",
         "text": (
             "This film features two of my favorite guilty pleasures. Sure, the effects "
             "are laughable, the story confused, but just watching Hasselhoff in his "
@@ -121,196 +211,189 @@ EXAMPLES = {
             "to shoot this in, it added to what little suspense was mustered. Give it a 3."
         ),
         "expected": (
-            "Sentiment réel : **négatif** (note de 3/10 mentionnée à la fin). "
-            "Le \"guilty pleasure\" exprime une appréciation ambivalente que les modèles "
-            "classiques peinent à distinguer d'un sentiment positif."
+            "Actual sentiment: **negative** (rating of 3/10 stated at the end). "
+            "The \"guilty pleasure\" framing expresses ambivalent appreciation that classical "
+            "models struggle to distinguish from positive sentiment."
         ),
         "is_tricky": True,
     },
 }
 
-CATEGORIES = [
-    "Cas clairs (haute confiance attendue)",
-    "Cas nuancés (le modèle hésite légitimement)",
-    "Cas difficiles (limites du modèle classique)",
-]
+CATEGORIES = ["Clear cases", "Nuanced cases", "Hard cases (model limits)"]
 
 
 # ============================================================================
-# UI principale
+# Session state initialization
 # ============================================================================
-st.title("Analyse de sentiment de critiques de films")
-
-st.markdown(
-    "Cette application classe une critique de film comme **positive** ou "
-    "**négative** à l'aide d'un modèle TF-IDF entraîné sur 22 000 critiques IMDB."
-)
-
-with st.container(border=True):
-    st.markdown(
-        "**À propos du modèle utilisé**\n\n"
-        "Le modèle a été entraîné uniquement sur des critiques **en anglais** "
-        "issues du corpus IMDB (films). Il atteint une exactitude de 92 % sur des "
-        "critiques de films similaires, mais peut sous-performer sur :\n"
-        "- des textes dans d'autres langues,\n"
-        "- des domaines différents (produits, restaurants, services),\n"
-        "- des tournures sarcastiques ou ironiques."
-    )
-
-
-# === Section : Exemples ===
-st.markdown("### Tester avec un exemple")
-st.caption(
-    "Tous les exemples proviennent du test set IMDB — le modèle ne les a jamais "
-    "vus pendant l'entraînement."
-)
-
 if "review_text" not in st.session_state:
     st.session_state["review_text"] = ""
 if "current_example_key" not in st.session_state:
     st.session_state["current_example_key"] = None
 
-for category in CATEGORIES:
-    items = [(k, v) for k, v in EXAMPLES.items() if v["category"] == category]
-    st.markdown(f"**{category}**")
-    cols = st.columns(len(items))
-    for col, (key, example) in zip(cols, items):
-        with col:
+
+# ============================================================================
+# Sidebar — Examples and documentation
+# ============================================================================
+with st.sidebar:
+    st.markdown("### Try an example")
+    st.caption("All examples come from the IMDB test set. The model never saw them during training.")
+
+    for category in CATEGORIES:
+        st.markdown(f"<div class='example-category'>{category}</div>", unsafe_allow_html=True)
+        items = [(k, v) for k, v in EXAMPLES.items() if v["category"] == category]
+        for key, example in items:
             if st.button(example["label"], key=f"btn_{key}", use_container_width=True):
                 st.session_state["review_text"] = example["text"]
                 st.session_state["current_example_key"] = key
 
+    st.markdown("---")
+    st.markdown("### Documentation")
 
-# === Section : Saisie ===
-st.markdown("### Critique à analyser")
+    with st.expander("About the model"):
+        st.markdown(
+            "The model is a **logistic regression** trained on **TF-IDF vectors** "
+            "combining unigrams and bigrams. Three paradigms were compared on this project:\n\n"
+            "| Approach | Validation F1 | Notes |\n"
+            "| :--- | :---: | :--- |\n"
+            "| Simple n-grams (counts) | 0.906 | Strong baseline |\n"
+            "| **TF-IDF uni+bi sublinear** | **0.919** | Used here |\n"
+            "| BiLSTM + GloVe 300d | 0.914 | Statistically equivalent |\n"
+            "| DistilBERT (in progress) | — | Expected next step |\n\n"
+            "TF-IDF was chosen for this demo for its balance of performance and size "
+            "(12 MB vs 250 MB for DistilBERT)."
+        )
 
-review = st.text_area(
-    label="critique",
-    value=st.session_state["review_text"],
-    height=180,
-    placeholder=(
-        "Tapez une critique en anglais, ou choisissez un exemple ci-dessus."
-    ),
-    label_visibility="collapsed",
+    with st.expander("Model card"):
+        st.markdown(
+            "**Intended use.** Binary sentiment classification of English movie reviews, "
+            "for educational or NLP pipeline demonstration purposes.\n\n"
+            "**Training data.** 22,000 reviews from the public IMDB corpus "
+            "(Maas et al., 2011), balanced between positive and negative classes.\n\n"
+            "**Measured performance.** Accuracy 92.0%, macro F1 91.9% on a validation "
+            "set of 3,000 reviews. Test set performance (25,000 reviews) to be measured "
+            "once the final model is selected.\n\n"
+            "**Known limitations.**\n"
+            "- Trained on English only. Output is unreliable on other languages.\n"
+            "- Degraded performance on out-of-domain texts (products, services, etc.).\n"
+            "- Sensitive to sarcasm and irony: a text with lexically positive markers "
+            "may be classified as positive even if the intent is ironic.\n"
+            "- Does not differentiate very short texts (< 20 words) from long ones; "
+            "short texts are typically less reliable.\n\n"
+            "**Ethical considerations.** This model should not be used for automated "
+            "decisions affecting individuals (content moderation, customer feedback "
+            "scoring in production) without human validation and additional auditing."
+        )
+
+    with st.expander("Technical details"):
+        st.markdown(
+            "**Preprocessing.** Lowercase conversion, punctuation removal, "
+            "whitespace tokenization.\n\n"
+            "**Vectorization.** scikit-learn's TfidfVectorizer, ngram_range=(1,2), "
+            "min_df=3, sublinear_tf=True. Vocabulary of 242,975 features.\n\n"
+            "**Classifier.** PyTorch logistic regression, Adam optimizer, lr=1e-3, "
+            "early stopping (patience 3, min_delta 1e-4), macro F1 as selection criterion.\n\n"
+            "**Reproducibility.** All experiments are versioned in "
+            "`outputs/experiments.json` of the GitHub repository. Intermediate champions "
+            "(bigram baseline, TF-IDF, BiLSTM+GloVe) are archived locally."
+        )
+
+    st.markdown("---")
+    st.markdown(
+        "<p style='font-size: 0.8rem; color: #6a6a65; margin-top: 1rem;'>"
+        "<strong>Sandra Desmair Fogang Lontouo</strong><br>"
+        "<a href='https://github.com/sandraFogang/nlp-sentiment-classification' "
+        "target='_blank' style='color: #4a4a45;'>GitHub</a> · "
+        "<a href='https://www.linkedin.com/in/sandrafogang' "
+        "target='_blank' style='color: #4a4a45;'>LinkedIn</a>"
+        "</p>",
+        unsafe_allow_html=True,
+    )
+
+
+# ============================================================================
+# Main area — Hero header + input + results
+# ============================================================================
+st.markdown(
+    """
+    <div class='hero-header'>
+        <h1>Sentiment Analysis of Movie Reviews</h1>
+        <p>Classify a movie review as <strong>positive</strong> or <strong>negative</strong> using a TF-IDF model trained on IMDB.</p>
+        <div class='hero-stats'>
+            <span>Training data: <strong>22,000 reviews</strong></span>
+            <span>Validation F1: <strong>91.9%</strong></span>
+            <span>Language: <strong>English</strong></span>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
 
-# Si l'utilisateur modifie le texte, on perd l'association à l'exemple
+# Limitations notice (compact)
+st.info(
+    "**Note.** This model was trained exclusively on **English** movie reviews. "
+    "It may underperform on other languages, out-of-domain texts (products, services), "
+    "or texts using sarcasm and irony.",
+    icon="ℹ️",
+)
+
+# === Input area ===
+review = st.text_area(
+    label="Review to analyze",
+    value=st.session_state["review_text"],
+    height=170,
+    placeholder=(
+        "Paste an English movie review here, or pick an example from the sidebar."
+    ),
+    label_visibility="visible",
+)
+
+# Detect manual edit (drop association with the loaded example)
 if review != st.session_state["review_text"]:
     st.session_state["current_example_key"] = None
+    st.session_state["review_text"] = review
 
-analyse = st.button("Analyser le sentiment", type="primary", use_container_width=True)
+analyze = st.button(
+    "Analyze sentiment",
+    type="primary",
+    use_container_width=True,
+)
 
 
-# === Section : Résultat ===
-if analyse:
+# === Results ===
+if analyze:
     if not review.strip():
-        st.warning("Veuillez entrer une critique ou choisir un exemple.")
+        st.warning("Please enter a review or pick an example from the sidebar.")
     else:
         predict_fn = get_predict_fn()
-        with st.spinner("Analyse en cours..."):
+        with st.spinner("Analyzing..."):
             result = predict_fn(review)
 
-        st.markdown("### Résultat")
+        st.markdown("<div class='result-section'></div>", unsafe_allow_html=True)
+        st.markdown("### Result")
 
         label = result["label"]
         confidence = result["confidence"]
         proba_pos = result["probabilities"]["positif"]
         proba_neg = result["probabilities"]["négatif"]
 
+        sentiment_label = "Positive" if label == "positif" else "Negative"
+
         col1, col2 = st.columns([1, 1])
         with col1:
-            st.metric(
-                label="Sentiment prédit",
-                value="Positif" if label == "positif" else "Négatif",
-            )
+            st.metric(label="Predicted sentiment", value=sentiment_label)
         with col2:
-            st.metric(label="Confiance", value=f"{confidence:.1%}")
+            st.metric(label="Confidence", value=f"{confidence:.1%}")
 
-        st.markdown("**Probabilités**")
-        st.progress(proba_neg, text=f"Négatif — {proba_neg:.1%}")
-        st.progress(proba_pos, text=f"Positif — {proba_pos:.1%}")
+        st.markdown("**Class probabilities**")
+        st.progress(proba_neg, text=f"Negative — {proba_neg:.1%}")
+        st.progress(proba_pos, text=f"Positive — {proba_pos:.1%}")
 
-        # Note explicative pour les exemples piégeux
+        # Explanatory note for tricky examples
         example_key = st.session_state.get("current_example_key")
         if example_key and EXAMPLES[example_key]["is_tricky"]:
             st.warning(
-                f"**Note sur cet exemple.** {EXAMPLES[example_key]['expected']}"
+                f"**Note on this example.** {EXAMPLES[example_key]['expected']}",
+                icon="⚠️",
             )
         elif example_key:
             st.caption(EXAMPLES[example_key]["expected"])
-
-
-# === Sections d'information rétractables ===
-st.divider()
-
-with st.expander("Comprendre le modèle"):
-    st.markdown(
-        "Le modèle utilisé est une **régression logistique** entraînée sur des "
-        "vecteurs **TF-IDF** combinant unigrammes et bigrammes. Trois paradigmes "
-        "ont été comparés sur ce projet :\n\n"
-        "| Approche | Validation F1 | Notes |\n"
-        "| :--- | :---: | :--- |\n"
-        "| N-grammes simples (comptage) | 0.906 | Baseline solide |\n"
-        "| **TF-IDF uni+bi sublinear** | **0.919** | Modèle utilisé ici |\n"
-        "| BiLSTM + GloVe 300d | 0.914 | Statistiquement équivalent |\n"
-        "| DistilBERT (en cours) | — | Saut technologique attendu |\n\n"
-        "Le TF-IDF a été retenu pour cette démonstration en raison de son équilibre "
-        "performance / taille (12 Mo contre 250 Mo pour DistilBERT)."
-    )
-
-with st.expander("Carte du modèle (model card)"):
-    st.markdown(
-        "**Usage prévu.** Classification binaire de critiques de films en anglais, "
-        "à des fins éducatives ou de démonstration de pipeline NLP.\n\n"
-        "**Données d'entraînement.** 22 000 critiques tirées du corpus public IMDB "
-        "(Maas et al., 2011), équilibrées entre classes positive et négative.\n\n"
-        "**Performance mesurée.** Exactitude 92.0 %, F1 macro 91.9 % sur un set de "
-        "validation de 3 000 critiques. Performance sur le test set (25 000 critiques) "
-        "à mesurer une fois le modèle final retenu.\n\n"
-        "**Limitations connues.**\n"
-        "- Modèle entraîné uniquement sur l'anglais. Sortie aléatoire sur d'autres "
-        "langues.\n"
-        "- Performance dégradée sur des textes hors du domaine cinéma "
-        "(produits, services, etc.).\n"
-        "- Sensible au sarcasme et à l'ironie : un texte avec des marqueurs "
-        "lexicalement positifs peut être classé positif même si l'intention est "
-        "ironique.\n"
-        "- Le modèle ne distingue pas les textes très courts (< 20 mots) des "
-        "textes longs ; les courts sont typiquement moins fiables.\n\n"
-        "**Considérations éthiques.** Ce modèle ne doit pas être utilisé pour "
-        "des décisions automatisées affectant des personnes (modération de contenu, "
-        "scoring de feedback client en production) sans validation humaine et "
-        "audit complémentaire."
-    )
-
-with st.expander("Détails techniques"):
-    st.markdown(
-        "**Préprocessing.** Mise en minuscules, retrait de la ponctuation, "
-        "tokenisation par espaces.\n\n"
-        "**Vectorisation.** TfidfVectorizer scikit-learn, ngram_range=(1,2), "
-        "min_df=3, sublinear_tf=True. Vocabulaire de 242 975 features.\n\n"
-        "**Classifieur.** Régression logistique PyTorch, optimiseur Adam, lr=1e-3, "
-        "early stopping (patience 3, min_delta 1e-4), F1 macro comme critère de "
-        "sélection.\n\n"
-        "**Reproductibilité.** Toutes les expériences sont versionnées dans "
-        "`outputs/experiments.json` du dépôt GitHub. Les modèles intermédiaires "
-        "(bigramme baseline, TF-IDF, BiLSTM+GloVe) sont archivés localement."
-    )
-
-
-# === Footer ===
-st.divider()
-
-st.markdown(
-    """
-    <div style='text-align: center; color: #666; font-size: 0.9em;'>
-        <p><strong>Sandra Desmair Fogang Lontouo</strong></p>
-        <p>
-            <a href='https://github.com/sandraFogang/nlp-sentiment-classification' target='_blank'>GitHub</a>
-            &nbsp;·&nbsp;
-            <a href='https://www.linkedin.com/in/sandrafogang' target='_blank'>LinkedIn</a>
-        </p>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)

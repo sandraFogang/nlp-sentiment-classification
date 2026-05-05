@@ -22,15 +22,17 @@ ENV/
 # === uv ===
 uv.lock
 
-# === Modèles entraînés (trop lourds pour Git) ===
+# === Modèles lourds (entraînés à la demande ou archivés localement) ===
 models/*.pkl
 models/*.pt
 models/*.pth
 models/*.bin
 models/*.safetensors
-models/checkpoints/*.pkl
-models/checkpoints/*.pt
-models/checkpoints/*.pth
+models/checkpoints/*
+
+# Exception : on garde le modèle de production TF-IDF (12 MB) pour le déploiement
+!models/classifier.pt
+!models/vocab.pkl
 
 # === Données brutes (à télécharger par l'utilisateur) ===
 data/raw/*.txt
