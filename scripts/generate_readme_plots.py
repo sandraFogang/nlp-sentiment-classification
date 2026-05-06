@@ -165,7 +165,7 @@ def plot_bert_training_curves() -> None:
     val_loss = [0.1896, 0.1830, 0.2662, 0.2656, 0.3045]
     best_epoch = 2
 
-    fig, ax = plt.subplots(figsize=(9, 5))
+    fig, ax = plt.subplots(figsize=(7, 4))
 
     ax.plot(epochs, train_loss, marker="o", label="Train loss",
             color=PALETTE["bert"], linewidth=2, markersize=8)
@@ -220,7 +220,7 @@ def plot_bert_frozen_vs_finetuned() -> None:
     params = ["1.5K params", "66.4M params"]
     colors = [PALETTE["neutral"], PALETTE["winner"]]
 
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(6, 4))
     bars = ax.bar(modes, f1_scores, color=colors, edgecolor="white",
                   linewidth=1, width=0.55)
 
@@ -276,7 +276,7 @@ def plot_lstm_ablation() -> None:
     f1 = [89.4, 89.3, 89.1, 90.3, 91.4]
     deltas = [89.4, -0.1, -0.2, +1.2, +1.1]
 
-    fig, ax = plt.subplots(figsize=(11, 5.5))
+    fig, ax = plt.subplots(figsize=(9, 4.5))
 
     # Bars : empilées pour effet "cascade"
     cumulative = [89.4]
@@ -376,6 +376,117 @@ def plot_review_length_distribution() -> None:
 
 
 # ============================================================================
+# Plot 7 : Test set confusion matrices (side by side)
+# ============================================================================
+def plot_test_confusion_matrices() -> None:
+    """Confusion matrices TF-IDF vs DistilBERT sur le test set."""
+    tfidf_cm = np.array([[11463, 1037], [1227, 11273]])
+    bert_cm = np.array([[11191, 1309], [533, 11967]])
+
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4.2))
+
+    for ax, cm, title, accent in [
+        (axes[0], tfidf_cm, "TF-IDF + Régression logistique", PALETTE["tfidf"]),
+        (axes[1], bert_cm, "DistilBERT fine-tuné", PALETTE["winner"]),
+    ]:
+        cm_pct = cm / cm.sum(axis=1, keepdims=True)
+        im = ax.imshow(cm_pct, cmap="Greens", vmin=0, vmax=1, aspect="auto")
+
+        for i in range(2):
+            for j in range(2):
+                value = cm[i, j]
+                pct = cm_pct[i, j] * 100
+                color = "white" if cm_pct[i, j] > 0.5 else "#222"
+                ax.text(j, i, f"{value:,}\n({pct:.1f}%)",
+                        ha="center", va="center",
+                        color=color, fontsize=11, fontweight="bold")
+
+        ax.set_xticks([0, 1])
+        ax.set_yticks([0, 1])
+        ax.set_xticklabels(["Négatif", "Positif"])
+        ax.set_yticklabels(["Négatif", "Positif"])
+        ax.set_xlabel("Prédiction")
+        ax.set_ylabel("Vérité terrain")
+        ax.set_title(title, color=accent, pad=10)
+        ax.grid(False)
+
+        # Bordures discrètes
+        for spine in ax.spines.values():
+            spine.set_visible(True)
+            spine.set_color("#ccc")
+
+    fig.suptitle(
+        "Confusion matrices sur le test set (25 000 critiques jamais vues)",
+        y=1.02, fontweight="bold", fontsize=12,
+    )
+    fig.tight_layout()
+    output = FIGURES_DIR / "07_test_confusion_matrices.png"
+    fig.savefig(output)
+    plt.close(fig)
+    print(f"  ✓ {output.name}")
+
+
+# ============================================================================
+# Plot 8 : Generalization analysis (val vs test)
+# ============================================================================
+def plot_val_vs_test_generalization() -> None:
+    """Compare F1 validation vs test pour les 2 modèles évalués sur test."""
+    models = ["TF-IDF", "DistilBERT\n(fine-tuné)"]
+    val_scores = [91.92, 93.19]
+    test_scores = [90.94, 92.62]
+    gaps = [val - test for val, test in zip(val_scores, test_scores)]
+
+    x = np.arange(len(models))
+    width = 0.32
+
+    fig, ax = plt.subplots(figsize=(7.5, 4.5))
+
+    bars_val = ax.bar(
+        x - width / 2, val_scores, width,
+        label="Validation (3 000)", color=PALETTE["neutral"],
+        edgecolor="white", linewidth=1,
+    )
+    bars_test = ax.bar(
+        x + width / 2, test_scores, width,
+        label="Test (25 000)", color=PALETTE["winner"],
+        edgecolor="white", linewidth=1,
+    )
+
+    for bar, score in list(zip(bars_val, val_scores)) + list(zip(bars_test, test_scores)):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2, score + 0.15,
+            f"{score:.2f}",
+            ha="center", fontsize=10, fontweight="bold",
+        )
+
+    # Annotation des écarts
+    for i, gap in enumerate(gaps):
+        ax.annotate(
+            f"écart : −{gap:.2f} pt",
+            xy=(i, 88.8), ha="center",
+            fontsize=9, color="#444", style="italic",
+        )
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(models)
+    ax.set_ylabel("F1 macro (%)")
+    ax.set_ylim(88, 95)
+    ax.set_title(
+        "Généralisation : performance sur validation vs test",
+        loc="left", pad=15,
+    )
+    ax.legend(loc="upper left", frameon=False, fontsize=10)
+    ax.grid(axis="x", visible=False)
+    ax.set_axisbelow(True)
+    ax.tick_params(axis="x", bottom=False)
+
+    fig.tight_layout()
+    output = FIGURES_DIR / "08_val_vs_test_generalization.png"
+    fig.savefig(output)
+    plt.close(fig)
+    print(f"  ✓ {output.name}")
+
+# ============================================================================
 # Main
 # ============================================================================
 def main() -> None:
@@ -388,9 +499,11 @@ def main() -> None:
     plot_bert_frozen_vs_finetuned()
     plot_lstm_ablation()
     plot_review_length_distribution()
+    plot_test_confusion_matrices()
+    plot_val_vs_test_generalization()
 
-    print(f"\n✓ 6 graphiques générés dans {FIGURES_DIR}/")
-    
+    print(f"\n✓ 8 graphiques générés dans {FIGURES_DIR}/")
+    print("  Vérifiez visuellement chaque PNG avant le commit.")
     
 
 if __name__ == "__main__":
