@@ -34,6 +34,10 @@ models/checkpoints/*
 !models/classifier.pt
 !models/vocab.pkl
 
+# Exception : on garde les figures du README
+!outputs/figures/
+!outputs/figures/*.png
+
 # === Données brutes (à télécharger par l'utilisateur) ===
 data/raw/*.txt
 data/raw/*.csv

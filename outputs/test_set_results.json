@@ -1,0 +1,20 @@
+{
+  "tfidf": {
+    "model": "TF-IDF + Logistic Regression",
+    "n_examples": 25000,
+    "accuracy": 0.90944,
+    "f1_macro": 0.9094347689522547,
+    "f1_positive": 0.9087464731962919,
+    "f1_negative": 0.9101230647082176,
+    "confusion_matrix": [
+      [
+        11463,
+        1037
+      ],
+      [
+        1227,
+        11273
+      ]
+    ]
+  }
+}
