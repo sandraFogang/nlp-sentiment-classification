@@ -16,5 +16,23 @@
         11273
       ]
     ]
+  },
+  "bert": {
+    "model": "DistilBERT (full fine-tuning)",
+    "n_examples": 25000,
+    "accuracy": 0.92632,
+    "f1_macro": 0.9262,
+    "f1_positive": 0.9285,
+    "f1_negative": 0.924,
+    "confusion_matrix": [
+      [
+        11191,
+        1309
+      ],
+      [
+        533,
+        11967
+      ]
+    ]
   }
 }

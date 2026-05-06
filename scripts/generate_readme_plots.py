@@ -35,9 +35,9 @@ plt.rcParams.update({
     "grid.linestyle": "-",
     "figure.facecolor": "white",
     "axes.facecolor": "white",
-    "savefig.bbox": "tight",
-    "savefig.dpi": 150,
+    "savefig.dpi": 100,
 })
+
 
 PALETTE = {
     "ngram":   "#7B8FA1",   # gris-bleu
@@ -220,7 +220,7 @@ def plot_bert_frozen_vs_finetuned() -> None:
     params = ["1.5K params", "66.4M params"]
     colors = [PALETTE["neutral"], PALETTE["winner"]]
 
-    fig, ax = plt.subplots(figsize=(6, 4))
+    fig, ax = plt.subplots(figsize=(7, 4.5))
     bars = ax.bar(modes, f1_scores, color=colors, edgecolor="white",
                   linewidth=1, width=0.55)
 
@@ -236,28 +236,24 @@ def plot_bert_frozen_vs_finetuned() -> None:
             ha="center", fontsize=10, color="white", fontweight="bold",
         )
 
-    # Annotation du saut
     ax.annotate(
         "+7.8 points",
         xy=(1, 93.2), xytext=(0.5, 90),
-        fontsize=14, fontweight="bold", color=PALETTE["winner"],
+        fontsize=12, fontweight="bold", color=PALETTE["winner"],
         ha="center",
         arrowprops=dict(arrowstyle="->", color=PALETTE["winner"], lw=2),
     )
 
     ax.set_ylabel("Validation F1 score (%)", fontsize=11)
-    ax.set_title(
-        "Impact du fine-tuning sur DistilBERT",
-        loc="left", pad=15,
-    )
+    ax.set_title("Impact du fine-tuning sur DistilBERT", loc="left", pad=15)
     ax.set_ylim(80, 96)
     ax.grid(axis="x", visible=False)
     ax.set_axisbelow(True)
     ax.tick_params(axis="x", bottom=False)
 
-    fig.tight_layout()
+    plt.subplots_adjust(left=0.12, right=0.95, top=0.88, bottom=0.15)
     output = FIGURES_DIR / "04_bert_frozen_vs_finetuned.png"
-    fig.savefig(output)
+    fig.savefig(output, bbox_inches=None, pad_inches=0)
     plt.close(fig)
     print(f"  ✓ {output.name}")
 
