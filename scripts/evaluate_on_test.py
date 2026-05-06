@@ -121,31 +121,50 @@ def evaluate_bert(test_data) -> dict:
     """Evaluate the DistilBERT champion on the full test set."""
     from torch.utils.data import DataLoader
 
-    from nlp_sentiment.bert_data import BertReviewDataset
+    from nlp_sentiment.bert_data import BertReviewDataset, build_tokenizer
     from nlp_sentiment.bert_model import BertSentimentClassifier
-    from transformers import AutoTokenizer
+    from nlp_sentiment.config import REVIEW_CLASSES
 
-    BERT_MODEL_PATH = PROJECT_ROOT / "models" / "checkpoints" / "distilbert_full_finetune.pt"
-    BERT_TOKENIZER_PATH = PROJECT_ROOT / "models" / "checkpoints" / "distilbert_tokenizer"
+    # Look in both possible locations (archived or fresh from train_champion_bert.py)
+    CANDIDATE_MODEL_PATHS = [
+        PROJECT_ROOT / "models" / "checkpoints" / "distilbert_full_finetune.pt",
+        PROJECT_ROOT / "models" / "bert_classifier.pt",
+    ]
+    CANDIDATE_TOKENIZER_PATHS = [
+        PROJECT_ROOT / "models" / "checkpoints" / "distilbert_tokenizer",
+        PROJECT_ROOT / "models" / "bert_tokenizer",
+    ]
 
-    if not BERT_MODEL_PATH.exists():
-        print(f"❌ BERT model not found at {BERT_MODEL_PATH}")
-        print("   Train and download from Colab via train_champion_bert.py")
+    BERT_MODEL_PATH = next((p for p in CANDIDATE_MODEL_PATHS if p.exists()), None)
+    BERT_TOKENIZER_PATH = next((p for p in CANDIDATE_TOKENIZER_PATHS if p.exists()), None)
+
+    if BERT_MODEL_PATH is None:
+        print(f"❌ BERT model not found in any of these locations :")
+        for p in CANDIDATE_MODEL_PATHS:
+            print(f"   - {p}")
+        print("   Train and save via : python scripts/train_champion_bert.py")
         return None
 
-    if not BERT_TOKENIZER_PATH.exists():
-        print(f"❌ BERT tokenizer not found at {BERT_TOKENIZER_PATH}")
+    if BERT_TOKENIZER_PATH is None:
+        print(f"❌ BERT tokenizer not found in any of these locations :")
+        for p in CANDIDATE_TOKENIZER_PATHS:
+            print(f"   - {p}")
         return None
+
+    print(f"  Using model     : {BERT_MODEL_PATH}")
+    print(f"  Using tokenizer : {BERT_TOKENIZER_PATH}")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"\n→ Evaluating DistilBERT on the full test set (25,000 reviews)...")
+    print(f"\n→ Evaluating DistilBERT on the full test set ({len(test_data):,} reviews)...")
     print(f"  Device : {device}")
     if device.type == "cpu":
         print("  ⚠️  CPU will take ~30-45 minutes. GPU strongly recommended.")
     print()
 
-    # Load tokenizer and model
-    tokenizer = AutoTokenizer.from_pretrained(str(BERT_TOKENIZER_PATH))
+    # Load tokenizer (reuse build_tokenizer to ensure consistent behaviour)
+    tokenizer = build_tokenizer(str(BERT_TOKENIZER_PATH))
+
+    # Build the BERT classifier and load fine-tuned weights
     model = BertSentimentClassifier(
         model_name="distilbert-base-uncased",
         freeze_bert=False,
@@ -155,11 +174,11 @@ def evaluate_bert(test_data) -> dict:
     model.to(device)
     model.eval()
 
-    # Build the test dataset
-    texts = [t for t, _ in test_data]
-    labels = [1 if l == "pos" else 0 for _, l in test_data]
+    # Build the test dataset (same format as training: list of (text, "pos"/"neg"))
     test_dataset = BertReviewDataset(
-        texts=texts, labels=labels, tokenizer=tokenizer, max_seq_len=512,
+        reviews=test_data,
+        tokenizer=tokenizer,
+        max_seq_len=512,
     )
     test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
@@ -168,17 +187,22 @@ def evaluate_bert(test_data) -> dict:
     y_true = []
     y_pred = []
 
+    pos_index = REVIEW_CLASSES.index("pos")
+
     with torch.no_grad():
-        for i, batch in enumerate(test_loader, start=1):
-            input_ids = batch["input_ids"].to(device)
-            attention_mask = batch["attention_mask"].to(device)
-            batch_labels = batch["labels"].cpu().numpy()
+        for i, (features, labels, _) in enumerate(test_loader, start=1):
+            input_ids = features["input_ids"].to(device)
+            attention_mask = features["attention_mask"].to(device)
+
+            # labels is a one-hot tensor of shape (batch, 2)
+            true_indices = torch.argmax(labels, dim=-1).cpu().numpy()
 
             logits = model(input_ids=input_ids, attention_mask=attention_mask)
-            preds = torch.argmax(logits, dim=-1).cpu().numpy()
+            pred_indices = torch.argmax(logits, dim=-1).cpu().numpy()
 
-            y_true.extend(batch_labels.tolist())
-            y_pred.extend(preds.tolist())
+            # Convert from REVIEW_CLASSES order to binary (1=pos, 0=neg)
+            y_true.extend((true_indices == pos_index).astype(int).tolist())
+            y_pred.extend((pred_indices == pos_index).astype(int).tolist())
 
             if i % 100 == 0:
                 processed = i * 32
@@ -194,7 +218,6 @@ def evaluate_bert(test_data) -> dict:
 
     return print_metrics("DistilBERT (full fine-tuning)",
                          y_true, y_pred, len(test_data))
-
 
 # ============================================================================
 # Main
