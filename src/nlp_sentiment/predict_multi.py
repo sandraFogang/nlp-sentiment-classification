@@ -56,8 +56,7 @@ def _build_tfidf_predictor(state_dict: dict, vectorizer: Any):
     return predict, model, vectorizer
 
 
-def _build_bilstm_predictor(state_dict: dict, vocab: dict):
-    word2idx = vocab["word2idx"] if isinstance(vocab, dict) else vocab
+def _build_bilstm_predictor(state_dict: dict, word2idx: dict):
     pad_idx = word2idx.get("<PAD>", 0)
     unk_idx = word2idx.get("<UNK>", 1)
     vocab_size = len(word2idx)

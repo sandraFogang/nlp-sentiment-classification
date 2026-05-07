@@ -32,18 +32,14 @@ COLOR_PURPLE = "#A87FFF"
 st.markdown(
     f"""
     <style>
-    .stApp, [data-testid="stAppViewContainer"] {{
-        background-color: #0E1117 !important;
-    }}
+    .stApp, [data-testid="stAppViewContainer"] {{ background-color: #0E1117 !important; }}
     .block-container {{
         padding: 0.3rem 0.6rem !important;
         max-width: 100% !important;
     }}
     .stApp, .stApp p, .stApp label {{ color: #E0E0E0; }}
 
-    [data-testid="stVerticalBlock"] > [data-testid="element-container"] {{
-        margin-bottom: 0.15rem !important;
-    }}
+    [data-testid="stVerticalBlock"] > [data-testid="element-container"] {{ margin-bottom: 0.15rem !important; }}
     [data-testid="stHorizontalBlock"] {{ gap: 0.5rem !important; }}
 
     section[data-testid="stSidebar"] {{
@@ -278,7 +274,7 @@ st.markdown(
         font-size: 0.72rem;
         margin-bottom: 0.15rem;
     }}
-    .tech-item-desc {{ color: #B0B3BB; font-size: 0.64rem; line-height: 1.3; }}
+    .tech-item-desc {{ color: #B0B3BB; font-size: 0.66rem; line-height: 1.45; }}
 
     .footer-bar {{
         text-align: center;
@@ -335,7 +331,7 @@ COMPARISON_TABLE = [
 
 EXAMPLES = {
     "Positive": "The acting was phenomenal, the story kept me engaged from start to finish, and the cinematography was breathtaking. Absolutely one of the best movies I have ever seen!",
-    "Negative": "What a complete waste of time. The plot was incoherent, the acting was wooden, and the pacing was excruciatingly slow. I checked my watch every few minutes hoping it would end.",
+    "Negative": "I had high hopes for this one but it ended up being pretty disappointing. The lead actor does his best, but the script is shallow and the editing feels rushed. Not the worst film I've seen, just forgettable.",
     "Sarcastic": "There must be an error. This movie belongs with \"Plan 9\", and a lot others as a quite entertaining, silly diversion. You'll never accept you like it, yet you will watch it whenever it comes out on TV.",
     "Neutral": "The film has its moments. Some scenes are visually impressive and the lead performance shows real talent. However, the screenplay feels underdeveloped and the second act drags considerably.",
 }
@@ -385,19 +381,26 @@ if "textarea_widget" not in st.session_state:
     st.session_state["textarea_widget"] = ""
 if "selected_model" not in st.session_state:
     st.session_state["selected_model"] = "tfidf"
-if "last_result" not in st.session_state:
-    st.session_state["last_result"] = None
-if "last_text" not in st.session_state:
-    st.session_state["last_text"] = ""
+if "current_text" not in st.session_state:
+    st.session_state["current_text"] = ""
+if "predictions_by_model" not in st.session_state:
+    st.session_state["predictions_by_model"] = {}
 if "last_error" not in st.session_state:
     st.session_state["last_error"] = None
 
 
+def _reset_predictions_if_text_changed(new_text: str) -> None:
+    if new_text != st.session_state["current_text"]:
+        st.session_state["predictions_by_model"] = {}
+        st.session_state["current_text"] = new_text
+
+
 def _run_prediction(text: str) -> None:
+    _reset_predictions_if_text_changed(text)
     model_key = st.session_state["selected_model"]
     predict_fn, _model, _meta = load_predictor(model_key)
-    st.session_state["last_result"] = predict_fn(text)
-    st.session_state["last_text"] = text
+    result = predict_fn(text)
+    st.session_state["predictions_by_model"][model_key] = result
     st.session_state["last_error"] = None
 
 
@@ -410,7 +413,8 @@ def load_example_and_analyze(label: str) -> None:
 def trigger_analyze() -> None:
     text = st.session_state.get("textarea_widget", "").strip()
     if not text:
-        st.session_state["last_result"] = None
+        st.session_state["predictions_by_model"] = {}
+        st.session_state["current_text"] = ""
         st.session_state["last_error"] = "Please enter a review or pick an example."
         return
     _run_prediction(text)
@@ -497,7 +501,8 @@ with summary_col:
     )
 
 
-result = st.session_state["last_result"]
+predictions_by_model = st.session_state["predictions_by_model"]
+current_model_result = predictions_by_model.get(st.session_state["selected_model"])
 error = st.session_state["last_error"]
 
 
@@ -555,11 +560,11 @@ with pred_col:
             unsafe_allow_html=True,
         )
 
-        if result:
-            label = result["label"]
-            confidence = result["confidence"]
-            proba_pos = result["probabilities"]["positif"]
-            proba_neg = result["probabilities"]["négatif"]
+        if current_model_result:
+            label = current_model_result["label"]
+            confidence = current_model_result["confidence"]
+            proba_pos = current_model_result["probabilities"]["positif"]
+            proba_neg = current_model_result["probabilities"]["négatif"]
             is_positive = label == "positif"
             verdict_class = "verdict-pos" if is_positive else "verdict-neg"
             verdict_text = "POSITIVE" if is_positive else "NEGATIVE"
@@ -600,6 +605,15 @@ with pred_col:
                 f"<div style='padding: 0.5rem; color: {COLOR_NEG}; font-size: 0.78rem;'>⚠️ {error}</div>",
                 unsafe_allow_html=True,
             )
+        elif predictions_by_model:
+            st.markdown(
+                f"<div style='text-align: center; padding: 0.7rem 0.5rem; color: #888A92;'>"
+                f"<div style='font-size: 1.4rem;'>🔄</div>"
+                f"<p style='margin-top: 0.2rem; font-size: 0.72rem;'>Click <strong>Analyze Sentiment</strong> "
+                f"to compute the prediction with <strong>{selected_info['display_name']}</strong>.</p>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
         else:
             st.markdown(
                 "<div style='text-align: center; padding: 0.7rem 0.5rem; color: #888A92;'>"
@@ -621,13 +635,13 @@ with interp_col:
             unsafe_allow_html=True,
         )
 
-        if result:
+        if current_model_result:
             from nlp_sentiment.interpretability import explain_tfidf, explain_by_occlusion
 
             try:
                 model_key = st.session_state["selected_model"]
                 predict_fn, model_obj, meta = load_predictor(model_key)
-                analyzed_text = st.session_state["last_text"]
+                analyzed_text = st.session_state["current_text"]
 
                 if model_key == "tfidf":
                     pos_words, neg_words = explain_tfidf(
@@ -689,24 +703,18 @@ with comp_col:
             unsafe_allow_html=True,
         )
 
-        live_predictions = {}
-        if result:
-            live_predictions[st.session_state["selected_model"]] = {
-                "label": "Positive" if result["label"] == "positif" else "Negative",
-                "confidence": f"{result['confidence']:.1%}",
-            }
-
         html_parts = ["<div class='comp-row header'><div>Model</div><div>Prediction</div><div>Confidence</div><div>F1 (Val)</div><div>Latency</div></div>"]
 
         for row in COMPARISON_TABLE:
-            if row["key"] in live_predictions:
-                pred = live_predictions[row["key"]]
+            if row["key"] in predictions_by_model:
+                pred = predictions_by_model[row["key"]]
+                pred_label = "Positive" if pred["label"] == "positif" else "Negative"
                 badge = (
-                    f"<span class='pred-badge-pos'>Positive</span>"
-                    if pred["label"] == "Positive"
-                    else f"<span class='pred-badge-neg'>Negative</span>"
+                    f"<span class='pred-badge-pos'>{pred_label}</span>"
+                    if pred_label == "Positive"
+                    else f"<span class='pred-badge-neg'>{pred_label}</span>"
                 )
-                conf = pred["confidence"]
+                conf = f"{pred['confidence']:.1%}"
             else:
                 badge = "<span class='pred-badge-na'>—</span>"
                 conf = "<span class='pred-badge-na'>—</span>"
@@ -725,7 +733,7 @@ with comp_col:
 
         st.markdown(
             "<div style='color: #888A92; font-size: 0.6rem; margin-top: 0.25rem;'>"
-            "ⓘ F1 macro on validation (3 000 reviews). Live prediction shown only for the selected model."
+            "ⓘ F1 macro on validation (3 000 reviews). Predictions accumulate as you switch models on the same review."
             "</div>",
             unsafe_allow_html=True,
         )
@@ -736,11 +744,11 @@ st.markdown(
     <div class='tech-panel'>
         <div class='tech-panel-title'>📋 Technical Details &amp; Model Card</div>
         <div class='tech-grid'>
-            <div><div class='tech-item-title'>📂 Dataset</div><div class='tech-item-desc'>IMDB Reviews (Maas et al., 2011) · 22k / 3k / 25k splits</div></div>
-            <div><div class='tech-item-title'>⚙️ Preprocessing</div><div class='tech-item-desc'>Lowercase, punctuation removal, tokenization. WordPiece for BERT.</div></div>
-            <div><div class='tech-item-title'>🧬 Models Evaluated</div><div class='tech-item-desc'>3 paradigms: TF-IDF, BiLSTM (GloVe), DistilBERT.</div></div>
-            <div><div class='tech-item-title'>📊 Metrics</div><div class='tech-item-desc'>Accuracy, Precision, Recall, F1 macro, Latency, Size.</div></div>
-            <div><div class='tech-item-title'>⚠️ Limitations</div><div class='tech-item-desc'>Sarcasm, irony, short texts, English-only, dataset bias.</div></div>
+            <div><div class='tech-item-title'>📂 Dataset</div><div class='tech-item-desc'>50,000 IMDB movie reviews (Maas et al., 2011), split into 22k for training, 3k for validation, and 25k for the held-out test set.</div></div>
+            <div><div class='tech-item-title'>⚙️ Preprocessing</div><div class='tech-item-desc'>Lowercasing, punctuation removal and tokenization for the classical and recurrent models. WordPiece tokenization for DistilBERT, which keeps subwords and special tokens.</div></div>
+            <div><div class='tech-item-title'>🧬 Models Evaluated</div><div class='tech-item-desc'>Three paradigms hosted on the Hugging Face Hub and loaded on demand: TF-IDF with logistic regression, BiLSTM initialized with GloVe 300d embeddings, and DistilBERT fine-tuned end-to-end.</div></div>
+            <div><div class='tech-item-title'>📊 Metrics</div><div class='tech-item-desc'>Macro F1 score (the main selection criterion), accuracy, precision, recall, and latency per inference. The validation set drives model selection; final numbers come from the test set.</div></div>
+            <div><div class='tech-item-title'>⚠️ Limitations</div><div class='tech-item-desc'>The models work only on English movie reviews and tend to fail on sarcasm and short texts. Predictions reflect the IMDB corpus from 2011 and should not be used for automated decisions without human review.</div></div>
         </div>
     </div>
     """,
