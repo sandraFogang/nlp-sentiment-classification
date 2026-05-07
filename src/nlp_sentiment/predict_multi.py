@@ -63,11 +63,10 @@ def _build_bilstm_predictor(state_dict: dict, word2idx: dict):
 
     model = BiLSTMClassifierV2(
         vocab_size=vocab_size,
-        embedding_dim=300,
-        hidden_dim=128,
+        emb_dim=300,
+        hidden_dim=256,
         num_layers=2,
-        num_classes=len(REVIEW_CLASSES),
-        pad_idx=pad_idx,
+        output_dim=len(REVIEW_CLASSES),
     )
     model.load_state_dict(state_dict)
     model.to(DEVICE)
@@ -84,7 +83,6 @@ def _build_bilstm_predictor(state_dict: dict, word2idx: dict):
         return _predict_with_model(model, feature)
 
     return predict, model, word2idx
-
 
 def _build_distilbert_predictor(state_dict: dict, tokenizer_dir):
     from transformers import AutoTokenizer
