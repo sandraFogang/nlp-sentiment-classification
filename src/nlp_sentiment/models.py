@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class LogisticRegression(nn.Module):
@@ -48,18 +49,16 @@ class BiLSTMClassifierV2(nn.Module):
                 f"pooling must be one of {self.VALID_POOLINGS}, got {pooling!r}"
             )
         self.pooling = pooling
+        self.dropout_rate = dropout_rate
 
-        # Embedding layer — initialisable depuis GloVe pré-entraîné
-        self.embedding = nn.Embedding(vocab_size, emb_dim, padding_idx=0)
+        # Note : nom 'embeddings' (avec s) pour aligner avec le state dict du checkpoint
+        self.embeddings = nn.Embedding(vocab_size, emb_dim, padding_idx=0)
         if pretrained_embeddings is not None:
-            self.embedding.weight.data.copy_(pretrained_embeddings)
+            self.embeddings.weight.data.copy_(pretrained_embeddings)
             if freeze_embeddings:
-                self.embedding.weight.requires_grad = False
+                self.embeddings.weight.requires_grad = False
 
-        self.embedding_dropout = nn.Dropout(dropout_rate)
-
-        # BiLSTM : on désactive le dropout interne quand num_layers=1
-        # (PyTorch émet un warning sinon)
+        # PyTorch émet un warning si dropout != 0 avec num_layers=1
         effective_lstm_dropout = lstm_dropout if num_layers > 1 else 0.0
         self.lstm = nn.LSTM(
             input_size=emb_dim,
@@ -70,20 +69,20 @@ class BiLSTMClassifierV2(nn.Module):
             dropout=effective_lstm_dropout,
         )
 
-        # Sortie BiLSTM = 2 × hidden_dim (concat des deux directions)
-        self.classifier_dropout = nn.Dropout(dropout_rate)
-        self.classifier = nn.Linear(2 * hidden_dim, output_dim)
+        # Note : nom 'fc' pour aligner avec le state dict du checkpoint
+        # Sortie BiLSTM = 2 × hidden_dim (concat forward + backward)
+        self.fc = nn.Linear(2 * hidden_dim, output_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        embedded = self.embedding(x)
-        embedded = self.embedding_dropout(embedded)
+        embedded = self.embeddings(x)
+        embedded = F.dropout(embedded, p=self.dropout_rate, training=self.training)
 
         # outputs : (batch, seq_len, 2*hidden_dim)
         outputs, (h_n, _) = self.lstm(embedded)
 
         if self.pooling == "last":
             # h_n : (num_layers*2, batch, hidden_dim)
-            # On concat les états cachés de la dernière couche (forward + backward)
+            # Concat des états cachés de la dernière couche (forward + backward)
             forward_last = h_n[-2]
             backward_last = h_n[-1]
             pooled = torch.cat([forward_last, backward_last], dim=-1)
@@ -92,4 +91,5 @@ class BiLSTMClassifierV2(nn.Module):
         else:
             pooled = outputs.max(dim=1).values
 
-        return self.classifier(self.classifier_dropout(pooled))
+        pooled = F.dropout(pooled, p=self.dropout_rate, training=self.training)
+        return self.fc(pooled)
