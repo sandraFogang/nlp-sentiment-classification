@@ -1,64 +1,33 @@
-"""
-config.py — Configuration centralisée du projet.
-
-Toutes les constantes (graines aléatoires, hyperparamètres, chemins)
-sont définies ici pour faciliter la maintenance et la reproductibilité.
-"""
+"""Project-wide configuration: paths, device, random seeds, label scheme."""
 from pathlib import Path
 
 import torch
 
-# === Reproductibilité ===
-RANDOM_SEED = 202601
-TORCH_SEED = 202401
 
-# === Matériel ===
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-# === Dataset ===
-# IMDB Large Movie Review Dataset (Maas et al. 2011) — standard académique
-DATASET_NAME = "imdb"
-
-# Taille du val set extrait du train officiel (25 000 critiques)
-# 3 000 = équilibre entre statistique fiable et train assez grand pour le DL
-VAL_SIZE = 3000
-
-# Liste des classes possibles (ordre important : index 0 = neg, 1 = pos)
-REVIEW_CLASSES = ["neg", "pos"]
-
-# === Vocabulaire ===
-MAX_VOCAB_SIZE = 30_000
-
-# === Hyperparamètres d'entraînement ===
-BATCH_SIZE = 32
-LEARNING_RATE = 0.001
-N_EPOCHS = 5  # Conservé pour compatibilité (entraînement sans early stopping)
-
-# === Early stopping ===
-# Nombre max d'époques (ne sera atteint que si la val loss continue de baisser)
-MAX_EPOCHS = 15
-# Patience : nombre d'époques sans amélioration avant d'arrêter
-EARLY_STOPPING_PATIENCE = 3
-# Amélioration minimale pour considérer qu'il y a une "vraie" baisse de val loss
-# (évite que des fluctuations infimes empêchent l'arrêt)
-EARLY_STOPPING_MIN_DELTA = 0.0001
-
-# === Hyperparamètres du LSTM ===
-LSTM_EMBEDDING_DIM = 64
-LSTM_HIDDEN_DIM = 64
-
-# === Chemins du projet ===
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-MODELS_DIR = PROJECT_ROOT / "models"
-OUTPUTS_DIR = PROJECT_ROOT / "outputs"
+
+# Chemins clés du projet
 DATA_DIR = PROJECT_ROOT / "data"
+MODELS_DIR = PROJECT_ROOT / "models"
+CHECKPOINTS_DIR = MODELS_DIR / "checkpoints"
+OUTPUTS_DIR = PROJECT_ROOT / "outputs"
+FIGURES_DIR = OUTPUTS_DIR / "figures"
 
-# Cache pour les datasets téléchargés (Hugging Face datasets)
-HF_CACHE_DIR = DATA_DIR / "huggingface_cache"
-
-# Chemins de sauvegarde du modèle de production (bigramme déployé)
+# Modèle de production (TF-IDF) servi par Streamlit en mode local
 MODEL_PATH = MODELS_DIR / "classifier.pt"
 VOCAB_PATH = MODELS_DIR / "vocab.pkl"
 
-# Chemin du fichier de tracking des expériences
-EXPERIMENTS_PATH = OUTPUTS_DIR / "experiments.json"
+# Convention de classes : 0 = négatif, 1 = positif (alphabétique)
+REVIEW_CLASSES = ["neg", "pos"]
+
+# Graines pour reproductibilité (séparées pour numpy/random et pour PyTorch)
+RANDOM_SEED = 202601
+TORCH_SEED = 202401
+
+# Device : GPU si disponible, sinon CPU (HF Spaces et Streamlit Cloud sont CPU-only)
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# Découpage des données (les valeurs exactes dépendent du dataset chargé)
+TRAIN_SIZE = 22_000
+VAL_SIZE = 3_000
+TEST_SIZE = 25_000

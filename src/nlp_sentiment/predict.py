@@ -1,14 +1,10 @@
-"""
-predict.py — Interface d'inférence unifiée.
+"""Local-mode prediction interface for the deployed TF-IDF model.
 
-Ce module est le point d'entrée pour faire des prédictions sur de
-nouvelles critiques. Il gère automatiquement les deux types de modèles :
-- Mode 'count' : régression logistique sur n-grammes (vocab = liste de tuples)
-- Mode 'tfidf' : régression logistique sur TF-IDF (vocab = TfidfVectorizer)
+Auto-detects whether the saved vocabulary is a TfidfVectorizer (TF-IDF mode)
+or a list of n-gram tuples (count mode), and dispatches accordingly.
 
-Utilisé par :
-- L'app Streamlit (app/streamlit_app.py)
-- L'API FastAPI (api/main.py)
+Used by the Streamlit app in offline / local mode. The HF Spaces deployment
+loads models from the Hub via :mod:`predict_multi`.
 """
 import pickle
 from pathlib import Path
@@ -22,7 +18,7 @@ from nlp_sentiment.models import LogisticRegression
 from nlp_sentiment.preprocessor import preprocess
 
 
-# Cache global pour ne pas recharger le modèle à chaque prédiction
+# Cache pour eviter de recharger le modele a chaque appel
 _MODEL_CACHE: dict = {}
 
 
@@ -30,22 +26,14 @@ def load_model_and_vocab(
     model_path: Path = MODEL_PATH,
     vocab_path: Path = VOCAB_PATH,
 ) -> tuple[LogisticRegression, object, str]:
-    """
-    Charge le modèle et le vocabulaire/vectorizer depuis le disque.
-
-    Détecte automatiquement le format :
-    - Si vocab_path contient un TfidfVectorizer → mode 'tfidf'
-    - Sinon (liste de tuples) → mode 'count'
+    """Load the trained model and its vocabulary from disk.
 
     Returns:
-        Tuple (model, vocab_obj, mode) où :
-        - model : LogisticRegression chargé en mode eval
-        - vocab_obj : liste de tuples OU TfidfVectorizer
-        - mode : 'count' ou 'tfidf'
+        Tuple (model, vocab_obj, mode) where mode is 'count' or 'tfidf'.
 
     Raises:
-        FileNotFoundError: Si modèle ou vocab introuvable.
-                           L'utilisateur doit lancer train_champion_tfidf.py.
+        FileNotFoundError: When the artifacts are missing on disk. Run
+            ``scripts/train_champion_tfidf.py`` to generate them.
     """
     cache_key = (str(model_path), str(vocab_path))
     if cache_key in _MODEL_CACHE:
@@ -53,20 +41,19 @@ def load_model_and_vocab(
 
     if not model_path.exists():
         raise FileNotFoundError(
-            f"Modèle introuvable : {model_path}\n"
-            f"Lancez : python scripts/train_champion_tfidf.py"
+            f"Model not found at {model_path}. "
+            f"Run: python scripts/train_champion_tfidf.py"
         )
     if not vocab_path.exists():
         raise FileNotFoundError(
-            f"Vocabulaire introuvable : {vocab_path}\n"
-            f"Lancez : python scripts/train_champion_tfidf.py"
+            f"Vocab not found at {vocab_path}. "
+            f"Run: python scripts/train_champion_tfidf.py"
         )
 
-    # Charge le vocab/vectorizer
     with open(vocab_path, "rb") as f:
         vocab_obj = pickle.load(f)
 
-    # Détection automatique du mode
+    # Detection automatique du format (TfidfVectorizer vs liste de n-grammes)
     if isinstance(vocab_obj, TfidfVectorizer):
         mode = "tfidf"
         input_dim = len(vocab_obj.vocabulary_)
@@ -75,13 +62,14 @@ def load_model_and_vocab(
         input_dim = len(vocab_obj)
     else:
         raise ValueError(
-            f"Format de vocabulaire non reconnu : {type(vocab_obj).__name__}. "
-            f"Attendu : list (mode count) ou TfidfVectorizer (mode tfidf)."
+            f"Unrecognized vocab format: {type(vocab_obj).__name__}. "
+            f"Expected list (count mode) or TfidfVectorizer (tfidf mode)."
         )
 
-    # Reconstruit et charge le modèle
     model = LogisticRegression(input_dim=input_dim, output_dim=len(REVIEW_CLASSES))
-    model.load_state_dict(torch.load(model_path, map_location=DEVICE, weights_only=True))
+    model.load_state_dict(
+        torch.load(model_path, map_location=DEVICE, weights_only=True)
+    )
     model.eval()
     model = model.to(DEVICE)
 
@@ -90,7 +78,7 @@ def load_model_and_vocab(
 
 
 def _build_feature_count(text: str, vocab: list[tuple]) -> torch.Tensor:
-    """Construit un vecteur de comptage de bigrammes (mode count)."""
+    """Build a count vector of bigrams (count mode)."""
     n = 2
     tokens = preprocess(text)
     ngram_to_idx = {ngram: i for i, ngram in enumerate(vocab)}
@@ -100,17 +88,16 @@ def _build_feature_count(text: str, vocab: list[tuple]) -> torch.Tensor:
         ngram = tuple(tokens[i : i + n])
         if ngram in ngram_to_idx:
             feature[ngram_to_idx[ngram]] += 1
-
     return feature.unsqueeze(0)
 
 
 def _build_feature_tfidf(text: str, vectorizer: TfidfVectorizer) -> torch.Tensor:
-    """Construit un vecteur TF-IDF (mode tfidf)."""
+    """Build a TF-IDF vector (tfidf mode)."""
     tokens = preprocess(text)
     text_joined = " ".join(tokens)
-    sparse_features = vectorizer.transform([text_joined])
+    sparse = vectorizer.transform([text_joined])
     feature = torch.tensor(
-        sparse_features.toarray()[0],
+        sparse.toarray()[0],
         dtype=torch.float32,
         device=DEVICE,
     )
@@ -118,36 +105,27 @@ def _build_feature_tfidf(text: str, vectorizer: TfidfVectorizer) -> torch.Tensor
 
 
 def predict(text: str) -> dict:
-    """
-    Prédit le sentiment d'une critique de film.
+    """Predict the sentiment of a movie review.
 
     Args:
-        text: Critique brute (texte en anglais).
+        text: Raw review text in English.
 
     Returns:
-        Dict avec :
-        - 'label' : 'positif' ou 'négatif'
-        - 'confidence' : probabilité de la classe prédite
-        - 'probabilities' : dict avec les proba pour chaque classe
-        - 'model_type' : 'count' ou 'tfidf'
+        Dict with keys 'label', 'confidence', 'probabilities', 'model_type'.
 
-    Example:
-        >>> result = predict("This movie was absolutely wonderful!")
-        >>> result['label']
-        'positif'
+    Raises:
+        ValueError: When the input text is empty.
     """
     if not text or not text.strip():
-        raise ValueError("Le texte d'entrée ne peut pas être vide.")
+        raise ValueError("Input text cannot be empty.")
 
     model, vocab_obj, mode = load_model_and_vocab()
 
-    # Construction du vecteur d'entrée selon le mode
     if mode == "count":
         feature = _build_feature_count(text, vocab_obj)
-    else:  # mode == "tfidf"
+    else:
         feature = _build_feature_tfidf(text, vocab_obj)
 
-    # Inférence
     with torch.no_grad():
         logits = model(feature)
         probabilities = F.softmax(logits, dim=1).squeeze(0).cpu().tolist()

@@ -1,4 +1,11 @@
-"""Unified prediction interface across the three deployed paradigms."""
+"""Unified prediction interface across the three deployed paradigms.
+
+Each builder takes the artifacts returned by the corresponding HF loader
+and returns ``(predict_fn, model, meta)`` where ``predict_fn`` accepts
+raw English text and returns a sentiment dict.
+
+Used by the Streamlit app for live inference on HF Spaces.
+"""
 from __future__ import annotations
 
 from typing import Any
@@ -6,30 +13,26 @@ from typing import Any
 import torch
 import torch.nn.functional as F
 
+from nlp_sentiment.bert_model import BertSentimentClassifier
 from nlp_sentiment.config import REVIEW_CLASSES
 from nlp_sentiment.hf_loader import (
     load_bilstm_artifacts,
     load_distilbert_artifacts,
     load_tfidf_artifacts,
 )
-from nlp_sentiment.models import LogisticRegression, BiLSTMClassifierV2
-from nlp_sentiment.bert_model import BertSentimentClassifier
+from nlp_sentiment.models import BiLSTMClassifierV2, LogisticRegression
 from nlp_sentiment.preprocessor import preprocess
 
 
+# HF Spaces et Streamlit Cloud sont CPU-only sur le free tier
 DEVICE = torch.device("cpu")
 
 
-def _predict_with_model(model: torch.nn.Module, feature: torch.Tensor) -> dict:
-    model.eval()
-    with torch.no_grad():
-        logits = model(feature)
-        probs = F.softmax(logits, dim=-1).squeeze(0).cpu().tolist()
-
+def _format_prediction(probs: list[float]) -> dict:
+    """Convert a 2-class probability list into the standard prediction dict."""
     pred_idx = int(max(range(len(probs)), key=lambda i: probs[i]))
     pred_class = REVIEW_CLASSES[pred_idx]
     label = "positif" if pred_class == "pos" else "négatif"
-
     return {
         "label": label,
         "confidence": round(probs[pred_idx], 4),
@@ -40,7 +43,17 @@ def _predict_with_model(model: torch.nn.Module, feature: torch.Tensor) -> dict:
     }
 
 
+def _predict_with_model(model: torch.nn.Module, feature: torch.Tensor) -> dict:
+    """Run forward pass + softmax on a generic torch model."""
+    model.eval()
+    with torch.no_grad():
+        logits = model(feature)
+        probs = F.softmax(logits, dim=-1).squeeze(0).cpu().tolist()
+    return _format_prediction(probs)
+
+
 def _build_tfidf_predictor(state_dict: dict, vectorizer: Any):
+    """Build a predict_fn for the TF-IDF + Logistic Regression model."""
     input_dim = len(vectorizer.vocabulary_)
     model = LogisticRegression(input_dim=input_dim, output_dim=len(REVIEW_CLASSES))
     model.load_state_dict(state_dict)
@@ -57,10 +70,12 @@ def _build_tfidf_predictor(state_dict: dict, vectorizer: Any):
 
 
 def _build_bilstm_predictor(state_dict: dict, word2idx: dict):
+    """Build a predict_fn for the BiLSTM + GloVe 300d model."""
     pad_idx = word2idx.get("<PAD>", 0)
     unk_idx = word2idx.get("<UNK>", 1)
     vocab_size = len(word2idx)
 
+    # Hyperparametres alignes sur le checkpoint entraine (hidden_dim=256, emb_dim=300)
     model = BiLSTMClassifierV2(
         vocab_size=vocab_size,
         emb_dim=300,
@@ -84,7 +99,9 @@ def _build_bilstm_predictor(state_dict: dict, word2idx: dict):
 
     return predict, model, word2idx
 
+
 def _build_distilbert_predictor(state_dict: dict, tokenizer_dir):
+    """Build a predict_fn for the DistilBERT (fine-tuned) model."""
     from transformers import AutoTokenizer
 
     tokenizer = AutoTokenizer.from_pretrained(str(tokenizer_dir))
@@ -111,23 +128,12 @@ def _build_distilbert_predictor(state_dict: dict, tokenizer_dir):
         with torch.no_grad():
             logits = model(input_ids=input_ids, attention_mask=attention_mask)
             probs = F.softmax(logits, dim=-1).squeeze(0).cpu().tolist()
-
-        pred_idx = int(max(range(len(probs)), key=lambda i: probs[i]))
-        pred_class = REVIEW_CLASSES[pred_idx]
-        label = "positif" if pred_class == "pos" else "négatif"
-
-        return {
-            "label": label,
-            "confidence": round(probs[pred_idx], 4),
-            "probabilities": {
-                "négatif": round(probs[0], 4),
-                "positif": round(probs[1], 4),
-            },
-        }
+        return _format_prediction(probs)
 
     return predict, model, tokenizer
 
 
+# Mapping clé du modèle → (loader HF, builder local)
 BUILDERS = {
     "tfidf": (load_tfidf_artifacts, _build_tfidf_predictor),
     "bilstm": (load_bilstm_artifacts, _build_bilstm_predictor),
@@ -136,8 +142,19 @@ BUILDERS = {
 
 
 def build_predictor(model_key: str):
+    """Build a predictor for the given model key.
+
+    Args:
+        model_key: One of 'tfidf', 'bilstm', 'distilbert'.
+
+    Returns:
+        Tuple ``(predict_fn, model, meta)``.
+
+    Raises:
+        ValueError: When ``model_key`` is unknown.
+    """
     if model_key not in BUILDERS:
-        raise ValueError(f"Unknown model: {model_key}")
+        raise ValueError(f"Unknown model: {model_key!r}")
     loader, builder = BUILDERS[model_key]
     artifacts = loader()
     return builder(*artifacts)
