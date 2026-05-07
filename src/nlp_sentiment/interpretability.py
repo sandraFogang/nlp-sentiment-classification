@@ -1,84 +1,91 @@
-"""interpretability.py — Word-level contribution analysis for the TF-IDF model.
+"""Word-level interpretability across all three deployed paradigms.
 
-Returns the top words pushing the prediction toward 'positif' or 'négatif'.
-Only works for linear models on TF-IDF features (logistic regression).
+For TF-IDF we use the closed-form coefficient contribution.
+For BiLSTM and DistilBERT we use Leave-One-Out occlusion.
 """
-from typing import Tuple
+from __future__ import annotations
+
+from typing import Callable
 
 import numpy as np
 
 from nlp_sentiment.config import REVIEW_CLASSES
-from nlp_sentiment.predict import load_model_and_vocab
 from nlp_sentiment.preprocessor import preprocess
 
 
-def get_word_contributions(text: str, top_k: int = 5) -> Tuple[list, list]:
-    """Compute the top-k words most contributing to positive and negative predictions.
+MAX_OCCLUSION_TOKENS = 30
 
-    For a linear model on TF-IDF, the contribution of word w to class c equals
-    ``tfidf_value(w) * logistic_weight(w, c)``. We return the top-k for both classes.
 
-    Args:
-        text: Raw review text.
-        top_k: Number of words to return per class (default 5).
-
-    Returns:
-        Tuple of (positive_words, negative_words). Each is a list of dicts with
-        keys 'word' and 'contribution'.
-
-    Raises:
-        ValueError: If the loaded model is not in TF-IDF mode.
-    """
-    model, vocab_obj, mode = load_model_and_vocab()
-
-    if mode != "tfidf":
-        raise ValueError(
-            f"Word contributions are only available for the TF-IDF model "
-            f"(current mode: {mode!r}). Other models would require LIME or SHAP."
-        )
-
-    # Vectoriser le texte avec le même pipeline que pendant l'entraînement
+def explain_tfidf(text: str, model, vectorizer, top_k: int = 5):
     tokens = preprocess(text)
-    text_joined = " ".join(tokens)
-    tfidf_vec = vocab_obj.transform([text_joined]).toarray()[0]
+    joined = " ".join(tokens)
+    tfidf_vec = vectorizer.transform([joined]).toarray()[0]
 
-    # Récupérer les poids du classifieur (matrice (2, n_features))
     weights = model.linear.weight.detach().cpu().numpy()
-
     pos_idx = REVIEW_CLASSES.index("pos")
     neg_idx = REVIEW_CLASSES.index("neg")
 
-    # Contribution = TF-IDF × poids
-    contrib_pos = tfidf_vec * weights[pos_idx]
-    contrib_neg = tfidf_vec * weights[neg_idx]
+    contrib_diff = tfidf_vec * (weights[pos_idx] - weights[neg_idx])
+    nonzero = tfidf_vec > 0
+    contrib_diff = np.where(nonzero, contrib_diff, 0.0)
 
-    # Différence : positif > 0 indique que le mot pousse vers 'positif'
-    contrib_diff = contrib_pos - contrib_neg
-
-    # Mots vraiment présents dans le texte (TF-IDF non-zéro)
-    nonzero_mask = tfidf_vec > 0
-    if nonzero_mask.sum() == 0:
+    if not nonzero.any():
         return [], []
 
-    feature_names = np.array(vocab_obj.get_feature_names_out())
+    feature_names = np.array(vectorizer.get_feature_names_out())
 
-    # Masquer la contribution des mots absents (pour qu'ils soient ignorés au tri)
-    contrib_diff_masked = np.where(nonzero_mask, contrib_diff, 0.0)
-
-    # Top-k mots positifs
-    pos_indices = np.argsort(contrib_diff_masked)[::-1][:top_k]
+    pos_indices = np.argsort(contrib_diff)[::-1][:top_k]
     positive_words = [
-        {"word": feature_names[i], "contribution": float(contrib_diff_masked[i])}
+        {"word": feature_names[i], "contribution": float(contrib_diff[i])}
         for i in pos_indices
-        if contrib_diff_masked[i] > 0
+        if contrib_diff[i] > 0
     ]
 
-    # Top-k mots négatifs (contribution la plus négative → on prend la valeur absolue)
-    neg_indices = np.argsort(contrib_diff_masked)[:top_k]
+    neg_indices = np.argsort(contrib_diff)[:top_k]
     negative_words = [
-        {"word": feature_names[i], "contribution": float(-contrib_diff_masked[i])}
+        {"word": feature_names[i], "contribution": float(-contrib_diff[i])}
         for i in neg_indices
-        if contrib_diff_masked[i] < 0
+        if contrib_diff[i] < 0
+    ]
+
+    return positive_words, negative_words
+
+
+def explain_by_occlusion(
+    text: str,
+    predict_fn: Callable[[str], dict],
+    top_k: int = 5,
+    max_tokens: int = MAX_OCCLUSION_TOKENS,
+):
+    tokens = preprocess(text)[:max_tokens]
+    if not tokens:
+        return [], []
+
+    baseline = predict_fn(text)
+    baseline_pos = baseline["probabilities"]["positif"]
+
+    contributions = []
+    for i, token in enumerate(tokens):
+        masked_tokens = tokens[:i] + tokens[i + 1:]
+        masked_text = " ".join(masked_tokens) if masked_tokens else "the"
+        masked_pred = predict_fn(masked_text)
+        masked_pos = masked_pred["probabilities"]["positif"]
+
+        delta = baseline_pos - masked_pos
+        contributions.append({"word": token, "contribution": float(delta)})
+
+    positive_words = sorted(
+        [c for c in contributions if c["contribution"] > 0],
+        key=lambda c: c["contribution"],
+        reverse=True,
+    )[:top_k]
+
+    negative_words = [
+        {"word": c["word"], "contribution": float(-c["contribution"])}
+        for c in sorted(
+            [c for c in contributions if c["contribution"] < 0],
+            key=lambda c: c["contribution"],
+        )[:top_k]
     ]
 
     return positive_words, negative_words
