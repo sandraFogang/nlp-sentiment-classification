@@ -42,12 +42,13 @@ Version compacte du dashboard, avec uniquement le modèle TF-IDF actif pour resp
 ---
 
 ## Aperçu de l'application
+## Démo en action
 
 <p align="center">
-  <img src="outputs/figures/demo_app.png" width="92%" alt="Aperçu du dashboard NLP Sentiment Analyzer" />
+  <img src="outputs/figures/demo_app.gif" width="92%" alt="Démonstration animée du dashboard multi-paradigmes" />
 </p>
 
-*Dashboard sombre multi-paradigmes — sélecteur de modèle en sidebar, prédiction en direct avec jauge de confiance, interprétabilité par mots clés, et tableau comparatif des trois modèles.*
+*Démonstration en direct sur Hugging Face Spaces : sélection des trois paradigmes (TF-IDF, BiLSTM, DistilBERT), prédictions en temps réel avec jauge de confiance, interprétabilité par occlusion, et tableau comparatif accumulant les verdicts des trois modèles sur la même critique.*
 
 ---
 
