@@ -42,7 +42,6 @@ Version compacte du dashboard, avec uniquement le modèle TF-IDF actif pour resp
 ---
 
 ## Aperçu de l'application
-## Démo en action
 
 <p align="center">
   <img src="outputs/figures/demo_app.gif" width="92%" alt="Démonstration animée du dashboard multi-paradigmes" />
