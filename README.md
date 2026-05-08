@@ -25,9 +25,9 @@ Le projet est déployé sur deux plateformes complémentaires.
 
 Les trois paradigmes (TF-IDF, BiLSTM + GloVe 300d, DistilBERT fine-tuné) sont servis en direct grâce aux 16 GB de RAM du tier gratuit HF Spaces. Les modèles sont hébergés séparément sur le Hugging Face Hub et téléchargés à la demande (lazy loading) au premier usage. Chaque modèle reste ensuite en cache pour les prédictions suivantes.
 
-### [📊 Streamlit Cloud — version légère (TF-IDF only)](https://sandra-fogang-sentiment-imdb.streamlit.app/)
+### [📊 Streamlit Cloud — déploiement secondaire](https://sandra-fogang-sentiment-imdb.streamlit.app/)
 
-Version compacte du dashboard, avec uniquement le modèle TF-IDF actif pour respecter la limite de 1 GB RAM du tier gratuit Streamlit. Latence d'inférence mesurée à environ 10 ms.
+Même dashboard déployé sur Streamlit Cloud, avec le même mécanisme de lazy loading depuis Hugging Face Hub. TF-IDF reste le modèle le plus rapide (~10 ms), idéal pour une démo ponctuelle. Les trois modèles restent disponibles, à charger à la demande selon les besoins.
 
 ### Fonctionnalités du dashboard
 
@@ -163,13 +163,13 @@ L'upload des modèles vers le Hub est lui-même reproductible via [`scripts/uplo
 | Validation | 3 000 | 1 500 / 1 500 | Sélection d'hyperparamètres et early stopping |
 | Test | 25 000 | 12 500 / 12 500 | Évaluation finale, intouché jusqu'à la sélection définitive |
 
-Les classes sont parfaitement équilibrées, ce qui rend le **F1 macro** quasi équivalent à l'accuracy dans ce contexte. Le F1 macro reste néanmoins préférable parce qu'il deviendrait plus robuste si la distribution venait à changer en production.
+Les classes sont parfaitement équilibrées, ce qui rend le **F1 macro** quasi équivalent à l'accuracy dans ce contexte. Le F1 score reste néanmoins préférable parce qu'il deviendrait plus robuste si la distribution venait à être déséquilibrée en production.
 
 <p align="center">
   <img src="outputs/figures/06_review_length_distribution.png" width="68%" alt="Distribution des longueurs de critiques" />
 </p>
 
-La longueur médiane d'une critique est d'environ 175 mots. La longueur maximale de **512 tokens** retenue (en WordPiece pour BERT, en mots pour les autres modèles) capture intégralement environ 95 % des critiques.
+La longueur médiane d'une critique est de 175 mots, mais la distribution est très étirée (P95 ≈ 600 mots). DistilBERT tronque à 512 tokens WordPiece — ce seuil couvre environ 95 % des critiques sans coupure. TF-IDF traite la critique entière. Le BiLSTM applique une troncature à 200 mots à l'inférence pour limiter la latence sur CPU.
 
 ---
 
@@ -192,7 +192,7 @@ Le tableau ci-dessous résume les performances de chaque champion sur le set de 
   <img src="outputs/figures/02_performance_vs_size.png" width="68%" alt="Performance vs taille du modèle" />
 </p>
 
-Cette représentation rend visible un fait peu évident : entre 5 MB et 250 MB de poids, on ne gagne que ~5 points de F1, et la majorité de ce gain est captée dès **12 MB** (TF-IDF). Ce trade-off justifie le choix d'avoir déployé les trois modèles plutôt qu'un seul — chaque paradigme a un usage légitime selon le contexte de production.
+Le graphique montre un point souvent ignoré : entre 5 MB et 250 MB de poids, on ne gagne que ~5 points de F1, et la majorité de ce gain est captée dès **12 MB** (TF-IDF). Ce trade-off justifie le choix d'avoir déployé les trois modèles plutôt qu'un seul — chaque paradigme a un usage légitime selon le contexte de production.
 
 ### Impact du fine-tuning sur DistilBERT
 
@@ -207,7 +207,7 @@ Le saut de **+7.8 points** confirme une intuition forte : un transformer pré-en
 
 ### Ablation contrôlée du BiLSTM
 
-Cinq variantes architecturales du BiLSTM ont été testées séquentiellement pour isoler l'effet de chaque modification :
+Cinq variantes du BiLSTM testées séquentiellement, pour isoler l'effet de chaque levier :
 
 <p align="center">
   <img src="outputs/figures/05_lstm_ablation.png" width="80%" alt="Ablation LSTM" />
@@ -239,7 +239,7 @@ Une fois la sélection d'hyperparamètres figée, les deux modèles candidats au
   <img src="outputs/figures/07_test_confusion_matrices.png" width="92%" alt="Confusion matrices test set" />
 </p>
 
-Une observation intéressante émerge de la comparaison côte à côte : **TF-IDF est quasi-symétrique** dans ses erreurs (1 037 faux positifs vs 1 227 faux négatifs), tandis que **DistilBERT est asymétrique** — il sur-classifie en positif (1 309 faux positifs contre seulement 533 faux négatifs). En pratique : BERT rate moins de critiques positives, mais signale plus de critiques négatives à tort comme positives. Cette asymétrie est documentée dans la [model card](#limitations-et-model-card) et représente une piste naturelle d'amélioration via recalibration.
+La comparaison côte à côte révèle un comportement très différent : **TF-IDF est quasi-symétrique** dans ses erreurs (1 037 faux positifs vs 1 227 faux négatifs), tandis que **DistilBERT est asymétrique** — il sur-classifie en positif (1 309 faux positifs contre seulement 533 faux négatifs). En pratique : BERT rate moins de critiques positives, mais signale plus de critiques négatives à tort comme positives. Cette asymétrie est documentée dans la [model card](#limitations-et-model-card) et représente une piste naturelle d'amélioration via recalibration.
 
 ### Analyse de la généralisation (val → test)
 
@@ -355,7 +355,7 @@ L'application Streamlit est déployée sur **deux plateformes** ciblant des cont
 | Plateforme | Hardware | Modèles servis | Cas d'usage |
 |------------|----------|----------------|-------------|
 | Hugging Face Spaces | Docker, 16 GB RAM, CPU | 3 modèles (lazy loaded) | Démo complète, comparaison interactive |
-| Streamlit Cloud | 1 GB RAM, CPU | TF-IDF uniquement | Démo rapide, latence ~10 ms |
+| Streamlit Cloud | 1 GB RAM, CPU | 3 modèles via lazy loading HF Hub | Déploiement secondaire, focus TF-IDF |
 
 Sur HF Spaces, la conteneurisation est gérée par un [`Dockerfile`](Dockerfile) qui expose Streamlit sur le port 7860 (convention HF). Sur Streamlit Cloud, un workflow GitHub Actions ping l'application toutes les 6 heures pour éviter le sleep mode du tier gratuit.
 
@@ -371,7 +371,7 @@ Le choix du modèle dépend du contexte de déploiement. Plutôt que de servir u
 | Taille du modèle | **8 MB** | 42 MB | 253 MB |
 | Latence d'inférence (CPU) | **~10 ms** | ~150 ms | ~500 ms |
 | Mémoire au runtime | <100 MB | ~250 MB | ~600 MB |
-| Compatible Streamlit Cloud free | **Oui** | Marginal | Non |
+| Compatible Streamlit Cloud (lazy loading) | ✅ | ✅ | ✅ (sous surveillance mémoire) |
 | Servi sur HF Spaces | ✅ | ✅ | ✅ |
 
 **Recommandations selon le contexte** :
@@ -482,7 +482,7 @@ L'environnement de déploiement HF Spaces est entièrement défini par le [`Dock
 - **Mesure précise de la latence d'inférence** TF-IDF vs BiLSTM vs DistilBERT sur CPU et GPU selon `max_seq_len`, avec benchmarks reproductibles.
 - **Extension multi-classes** — prédiction de la note 1-10 d'IMDB plutôt que classification binaire, ce qui permettrait des cas d'usage de recommandation plus fins.
 - **Détection du sarcasme** — entraînement complémentaire sur un corpus spécialisé (iSarcasm, SARC) pour adresser la principale limitation actuelle des trois modèles.
-- **Démo vidéo** intégrée au README (Loom ou capture GIF de l'application).
+- **Cohérence train/inference du BiLSTM** — actuellement entraîné sur des critiques entières mais tronqué à 200 mots à l'inférence. Aligner les deux (par ex. troncature à 512 mots à l'inférence, ou réentraînement avec la même limite) pour garantir la performance maximale en production.
 
 ---
 
