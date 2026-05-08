@@ -380,7 +380,6 @@ Le choix du modèle dépend du contexte de déploiement. Plutôt que de servir u
 - **Production où la précision compte plus que le coût (modération de contenu, aide à la décision médicale)** : DistilBERT fine-tuné, avec recalibration préalable pour corriger l'asymétrie observée sur le test set.
 - **Cas hybride (ex. cinéma, e-commerce)** : BiLSTM peut offrir un compromis intéressant, en particulier pour des textes courts à moyens.
 
-> **Position défendable en entretien :** « Le choix du modèle dépend des contraintes de déploiement. BERT améliore la performance, mais TF-IDF reste très compétitif pour un coût bien moindre. Servir les trois en parallèle rend ce trade-off tangible pour l'utilisateur final. »
 
 ---
 
@@ -392,9 +391,9 @@ Au-delà des chiffres, plusieurs principes ont été confirmés au cours du proj
 - **Tester avant d'adopter.** La régularisation L2 a été testée puis **rejetée** (effet dans le bruit statistique). Plutôt que de balayer ce résultat, il est documenté dans `experiments.json`.
 - **L'ablation contrôlée révèle ce qu'on n'aurait pas deviné.** Sur le LSTM, le changement de stratégie de pooling apporte plus que toutes les augmentations de capacité réunies.
 - **Le fine-tuning n'est pas un détail.** L'écart frozen / fine-tuned (85.4 → 93.2) est plus grand que l'écart entre n'importe quels deux modèles classiques de l'étude.
-- **L'évaluation finale sur test set est non-négociable.** Toutes les performances annoncées dans une présentation, un CV ou un README devraient toujours être les chiffres test, pas les chiffres validation.
+- **L'évaluation finale sur test set est non-négociable.** Les chiffres rapportés dans un projet ML doivent toujours être ceux du test set, jamais ceux de validation — sinon on rapporte le score d'un modèle ajusté à ce score.
 - **Le déploiement multi-modèles a une valeur pédagogique.** Servir les trois paradigmes en parallèle force l'utilisateur (et le développeur) à confronter les divergences — un cas où les trois modèles donnent des verdicts différents est plus instructif que n'importe quel benchmark agrégé.
-- **Reproductibilité = graines fixées + dépendances pinnées + Dockerfile.** Tous les runs utilisent `RANDOM_SEED=202601` et `TORCH_SEED=202401`. L'environnement de déploiement HF Spaces est entièrement reproductible via un Dockerfile minimal de 14 lignes.
+- **Reproductibilité: graines fixées,  dépendances et Dockerfile.** Tous les runs utilisent `RANDOM_SEED=202601` et `TORCH_SEED=202401`. L'environnement de déploiement HF Spaces est entièrement reproductible via un Dockerfile minimal de 14 lignes.
 
 ---
 
